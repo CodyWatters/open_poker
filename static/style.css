@@ -340,3 +340,33 @@ details summary { cursor: pointer; color: var(--gold2); margin: 8px 0; }
 #felt .felt .seat.hero .cards .card b { font-size: 40px; }
 #felt .felt .seat.hero .cards .card i { font-size: 34px; margin-top: 4px; }
 .actionbar .sizer { justify-content: flex-start; }
+
+/* fixed right-side buttons in the action bar */
+.actionbar .st-right { display: flex; gap: 8px; flex: none; }
+.actionbar .st-left { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* disabled buttons: always plain grey */
+button:disabled, button.primary:disabled, .actionbar button:disabled, .actionbar .fold:disabled, .actionbar .call:disabled {
+  background: #2b3131 !important; border-color: #394141 !important; color: #7f8a87 !important;
+  opacity: 1; box-shadow: none !important; outline: none !important;
+}
+.actionbar #a-speed { min-width: 140px; }
+.actionbar .st-right button:not(:disabled):not(.primary) { border-color: var(--gold); color: var(--gold2); background: #2a2614; }
+
+/* bigger tables: smaller seats so 7-10 players fit around the oval */
+.felt.seven .seat { width: 150px; }
+.felt.many .seat { width: 128px; }
+.felt.many .seat .name { font-size: 13px; } .felt.many .seat .stack { font-size: 14px; }
+#felt .felt.seven .seat { width: 178px; }
+#felt .felt.many .seat { width: 150px; }
+#felt .felt.many .seat .box { padding: 6px 6px 5px; }
+#felt .felt.many .seat .name { font-size: 15px; }
+#felt .felt.many .seat .stack { font-size: 17px; }
+#felt .felt.many .seat .cards { height: 56px; }
+#felt .felt.many .seat .cards .card { width: 40px; height: 56px; }
+#felt .felt.many .seat .cards .card b { font-size: 21px; } #felt .felt.many .seat .cards .card i { font-size: 18px; }
+#felt .felt.many .seat.hero { width: 190px; }
+#felt .felt.many .seat.hero .cards { height: 92px; }
+#felt .felt.many .seat.hero .cards .card { width: 64px; height: 92px; }
+#felt .felt.many .seat.hero .cards .card b { font-size: 34px; } #felt .felt.many .seat.hero .cards .card i { font-size: 29px; }
+#felt .felt.many .betchip { font-size: 16px; }
+.callout.small { font-size: 16px; padding: 5px 9px; }

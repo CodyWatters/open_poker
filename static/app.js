@@ -99,7 +99,7 @@ async function showLobby() {
   ${seated ? `<div class="panel row" style="margin-bottom:16px;border-color:var(--gold)">
       <b>You're seated at a table.</b><span class="spacer"></span><a href="#table"><button class="primary">Return to table</button></a></div>` : ""}
   <h2>Pick a table</h2>
-  <p class="muted" style="margin-top:-6px">6-max no-limit hold'em. Everyone sits with the buy-in (100 big blinds). Leave whenever you want and keep your stack.</p>
+  <p class="muted" style="margin-top:-6px">No-limit hold'em with 4 to 10 players (random each time you sit down). Everyone sits with the buy-in (100 big blinds). Leave whenever you want and keep your stack.</p>
   <div class="grid tables">
     ${l.stakes.map(s => `
       <div class="tcard ${s.locked ? "locked" : ""}">
@@ -150,14 +150,29 @@ function sessionsTable(sessions) {
 }
 
 /* ------------------------------------------------------------------ table renderer (shared with replayer) */
-const SEAT_POS = [[50, 100], [2, 68], [16, 8], [50, 0], [84, 8], [98, 68]];
-function seatXY(seat, heroSeat) { return SEAT_POS[((seat - heroSeat) % 6 + 6) % 6]; }
+// seats are laid out around the oval; you are always at the bottom
+const SEAT_POS6 = [[50, 100], [2, 68], [16, 8], [50, 0], [84, 8], [98, 68]];
+let LAYOUT_SEATS = [1, 2, 3, 4, 5, 6];
+function setLayout(st) { LAYOUT_SEATS = st.seats.map(s => s.seat).sort((a, b) => a - b); }
+function seatPosN(d, n) {
+  if (n === 6) return SEAT_POS6[d];
+  const a = (90 + d * 360 / n) * Math.PI / 180;
+  const x = 50 + 49 * Math.cos(a), y = 50 + 57 * Math.sin(a);
+  return [x, Math.max(-1, Math.min(100, y))];
+}
+function seatXY(seat, heroSeat) {
+  const n = LAYOUT_SEATS.length;
+  const i = LAYOUT_SEATS.indexOf(seat), h = Math.max(0, LAYOUT_SEATS.indexOf(heroSeat));
+  return seatPosN(((i - h) % n + n) % n, n);
+}
 function lerp(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
 
 function renderFelt(el, st, opts = {}) {
   const heroSeat = (st.seats.find(s => s.is_hero) || st.seats[0]).seat;
+  setLayout(st);
+  const many = st.seats.length >= 8 ? "many" : st.seats.length === 7 ? "seven" : "";
   const center = [50, 50];
-  let html = `<div class="felt-outer"><div class="felt">
+  let html = `<div class="felt-outer"><div class="felt ${many}">
     <div class="center"><div class="board">${[0, 1, 2, 3, 4].map(i => st.board[i] ? cardHTML(st.board[i]) : `<span class="card ghost"></span>`).join("")}</div>
     <div class="pot">Pot ${fmt(st.pot)}</div></div>`;
   for (const s of st.seats) {
@@ -276,8 +291,8 @@ async function showTable() {
     else if (k === "c") btn("#a-call");
     else if (k === "r") { const i = $("#amt"); if (i) { e.preventDefault(); i.focus(); i.select(); } }
     else if (k === "enter") btn("#a-raise");
-    else if (k === " " || k === "n") { if ($("#a-speed")) btn("#a-speed"); else btn("#a-next"); }
-    else if (k === "a") { if ($("#a-analyze")) btn("#a-analyze"); else btn("#a-last"); }
+    else if (k === " " || k === "n") { if ($("#a-speed:not([disabled])")) btn("#a-speed"); else btn("#a-next"); }
+    else if (k === "a") btn("#a-analyze");
   };
   document.addEventListener("keydown", onKey);
   cleanup = () => { document.removeEventListener("keydown", onKey); clearTimeout(T.autoTimer); closeAnalysis(false); };
@@ -341,7 +356,7 @@ function drawTable(f, prev) {
   }
   if (!f) return;
   $("#tname").textContent = f.table_name;
-  $("#tblinds").textContent = `$${f.stakes.sb.toLocaleString()}/$${f.stakes.bb.toLocaleString()} NL · 6-max`;
+  $("#tblinds").textContent = `$${f.stakes.sb.toLocaleString()}/$${f.stakes.bb.toLocaleString()} NL · ${f.n_seats || f.seats.length} players`;
   $("#snet").innerHTML = `<span class="${cls(f.session.net)}">${sfmt(f.session.net)}</span>`;
   $("#shands").textContent = f.session.hands;
   renderFelt($("#felt"), f, { prev: prev || null });
@@ -383,17 +398,14 @@ function drawActions(f) {
   // status row
   let status = "", right = "";
   if (f.busted) {
-    status = `<span class="result-banner neg">You're out of chips at this table.</span>`;
-    right = `<button class="primary" id="bust-leave">Back to lobby</button>`;
-    status += ` <span class="muted" style="margin-left:10px">Under $200? You can buy $1,000 in the lobby.</span>`;
+    status = `<span class="result-banner neg">You're out of chips at this table.</span>
+      <button class="primary" id="bust-leave" style="margin-left:12px">Back to lobby</button>`;
   } else if (f.hand_over && !busy) {
     const net = f.result ? f.result.hero_net : 0;
     status = `<span class="result-banner ${cls(net)}">${net > 0 ? "You won " + fmt(net) : net < 0 ? "You lost " + fmt(-net) : "Hand over"}</span>
 `;
-    right = `<button id="a-analyze">Analyze this hand</button> <button class="primary" id="a-next">Next hand</button>`;
   } else if (hero && hero.folded && !f.hand_over) {
     status = `<span class="muted">You folded · hand in progress…</span>`;
-    right = `<button class="primary" id="a-speed" ${T.turbo ? "disabled" : ""}>${T.turbo ? "Speeding up…" : "Speed up"}</button>`;
   } else if (L) {
     status = L.to_call ? `<span class="muted num">Pot odds ${pct(L.to_call / (L.pot + L.to_call))}</span>` : "";
   } else {
@@ -402,9 +414,13 @@ function drawActions(f) {
                : `<span class="muted">Waiting for other players… you can pre-select Fold or Check.</span>`)
       : `<span class="muted">Waiting for other players…</span>`;
   }
-  if (!f.hand_over && !f.busted && T.lastDone && T.lastDone !== f.hand_id) {
-    right = `<button id="a-last">Analyze last hand</button> ` + right;
-  }
+  // fixed buttons on the right: always shown, just enabled/disabled
+  const canSpeed = !!(hero && hero.folded && !f.hand_over && !f.busted && !T.turbo);
+  const analyzeId = f.hand_over ? f.hand_id : (T.lastDone && T.lastDone !== f.hand_id ? T.lastDone : null);
+  const canNext = !!(f.hand_over && !busy && !f.busted);
+  right = `<button id="a-speed" ${canSpeed ? "" : "disabled"}>${T.turbo ? "Speeding up…" : "Speed up"}</button>
+    <button id="a-analyze" ${analyzeId ? "" : "disabled"}>Analyze last hand</button>
+    <button class="primary" id="a-next" ${canNext ? "" : "disabled"}>Next hand</button>`;
   el.innerHTML = `
     <div class="ctrls">
       <button class="big fold ${T.pre === "fold" ? "queued" : ""}" id="a-fold" ${(L && !L.can_check) || canPre ? "" : "disabled"}>Fold</button>
@@ -417,13 +433,12 @@ function drawActions(f) {
         <button data-to="${maxTo}" ${canRaise ? "" : "disabled"}>All-in</button>
       </div>
     </div>
-    <div class="status"><div class="st-left">${status}</div><div>${right}</div></div>`;
-  const lb = $("#a-last"); if (lb) lb.onclick = () => openAnalysis(T.lastDone);
+    <div class="status"><div class="st-left">${status}</div><div class="st-right">${right}</div></div>`;
+  if (analyzeId) $("#a-analyze").onclick = () => openAnalysis(analyzeId);
+  if (canSpeed) $("#a-speed").onclick = speedUp;
+  if (canNext) $("#a-next").onclick = () => { closeAnalysis(false); nextHand(); };
   if (f.busted) { $("#bust-leave").onclick = () => $("#leave").click(); return; }
-  const sk = $("#a-speed"); if (sk) sk.onclick = speedUp;
   if (f.hand_over && !busy) {
-    $("#a-next").onclick = () => { closeAnalysis(false); nextHand(); };
-    $("#a-analyze").onclick = () => openAnalysis(f.hand_id);
     if (store.get("autodeal", true)) T.autoTimer = setTimeout(nextHand, f.result && f.result.showdown ? 2800 : 1700);
     return;
   }
@@ -486,9 +501,9 @@ function spawnCallouts(prev, f) {
     const amt = s.bet > 0 && kind !== "fold" && kind !== "check" ? " " + fmt(s.bet) : "";
     const seatP = seatXY(s.seat, hs);
     const isHero = s.seat === hs;
-    const from = px(lerp([50, 50], seatP, 0.92)), to = px(isHero ? [73, 80] : lerp([50, 50], seatP, 0.55));
+    const from = px(lerp([50, 50], seatP, 0.92)), to = px(isHero ? [73, 80] : lerp([50, 50], seatP, LAYOUT_SEATS.length >= 8 ? 0.8 : 0.55));
     const d = document.createElement("div");
-    d.className = "callout " + kind;
+    d.className = "callout " + kind + (LAYOUT_SEATS.length >= 8 ? " small" : "");
     d.textContent = word + amt;
     d.style.setProperty("--fx", from[0] + "px"); d.style.setProperty("--fy", from[1] + "px");
     d.style.setProperty("--tx", to[0] + "px"); d.style.setProperty("--ty", to[1] + "px");
@@ -546,8 +561,10 @@ function heroSeatOf(f) { return (f.seats.find(s => s.is_hero) || f.seats[0]).sea
 function betXY(seat, hs) { return seat === hs ? [65, 74] : lerp([50, 50], seatXY(seat, hs), 0.58); }
 function dealerXY(seat, hs) {
   if (seat === hs) return [35, 80];
-  const p = seatXY(seat, hs), d = lerp([50, 50], p, 0.66);
-  return [d[0] + (p[0] < 50 ? 6 : -6), d[1] + 4];
+  // sit the button beside the bet chip (offset sideways from the line to the centre)
+  const p = seatXY(seat, hs), d = lerp([50, 50], p, 0.68);
+  const vx = p[0] - 50, vy = p[1] - 50, len = Math.hypot(vx, vy) || 1;
+  return [d[0] - vy / len * 6, d[1] + vx / len * 9];
 }
 function seatChipXY(seat, hs) { return lerp([50, 50], seatXY(seat, hs), 0.9); }
 function flyChip(felt, from, to, label, dur) {
@@ -641,7 +658,7 @@ async function showHands(params) {
   <div class="filters panel">
     <select id="f-stakes"><option value="">All stakes</option>${["1k", "5k", "25k", "100k"].map(s => `<option value="${s}">$${s.toUpperCase()}</option>`).join("")}</select>
     <select id="f-session"><option value="">All sessions</option>${sessions.map(s => `<option value="${s.id}">${esc(s.table_name)} · ${new Date(s.started).toLocaleDateString()}</option>`).join("")}</select>
-    <select id="f-pos"><option value="">Any position</option>${["UTG", "HJ", "CO", "BTN", "SB", "BB"].map(p => `<option>${p}</option>`).join("")}</select>
+    <select id="f-pos"><option value="">Any position</option>${["UTG", "UTG+1", "UTG+2", "MP", "LJ", "HJ", "CO", "BTN", "SB", "BB"].map(p => `<option>${p}</option>`).join("")}</select>
     <select id="f-result"><option value="">Won or lost</option><option value="won">Won</option><option value="lost">Lost</option></select>
     <select id="f-flagged"><option value="">All hands</option><option value="1">Possible mistakes</option><option value="notes">Mistakes + notes</option></select>
     <label><input type="checkbox" id="f-showdown"> Showdown</label>
@@ -955,7 +972,7 @@ function aiPrompt(h) {
   const rec = h.record, an = h.analysis;
   const villains = rec.seats.filter(s => !s.is_hero).map(s => `- ${s.name} (${s.position}): ${s.archetype_label}`).join("\n");
   const decs = an ? an.decisions.map(d => `- ${d.street} (${d.board || "no board"}): I ${d.action}${d.amount ? " " + fmt(d.amount) : ""}; pot ${fmt(d.pot)}, to call ${fmt(d.to_call)}, needed ${pct(d.req)}; my equity vs estimated ranges ${pct(d.eq_range)}, vs actual cards ${pct(d.eq_actual)}${d.flags.length ? "; auto-flags: " + d.flags.map(f => f.text).join(" ") : ""}`).join("\n") : "";
-  return `Please review this 6-max No-Limit Hold'em cash hand I played ($${rec.sb}/$${rec.bb}, everyone started with 100 big blinds). I am "${rec.seats.find(s => s.is_hero).name}".
+  return `Please review this ${rec.max_seats || rec.seats.length}-handed No-Limit Hold'em cash hand I played ($${rec.sb}/$${rec.bb}, everyone started with 100 big blinds). I am "${rec.seats.find(s => s.is_hero).name}".
 Go street by street: what was good, what was a mistake, what a strong player would do instead and why (ranges, sizing, position). Be concise.
 
 ${h.hh}

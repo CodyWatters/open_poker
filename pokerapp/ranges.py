@@ -27,6 +27,44 @@ def hand_pct(hole):
 # Baseline (solid regular) preflop ranges, as fraction of all combos.
 BASE_OPEN = {"UTG": 0.15, "HJ": 0.19, "CO": 0.27, "BTN": 0.45, "SB": 0.38, "BB": 0.25, "MP": 0.17}
 BASE_CALL = {"UTG": 0.07, "HJ": 0.08, "CO": 0.10, "BTN": 0.14, "SB": 0.07, "BB": 0.32, "MP": 0.08}
+
+# Ranges by how many players still act after you preflop (incl. the blinds).
+# 6-max: UTG=5, HJ=4, CO=3, BTN=2, SB=1, BB=0. Full ring UTG (9 behind) is much tighter.
+OPEN_BY_BEHIND = {0: 0.25, 1: 0.38, 2: 0.45, 3: 0.27, 4: 0.19, 5: 0.15, 6: 0.125, 7: 0.105, 8: 0.095, 9: 0.085}
+CALL_BY_BEHIND = {0: 0.32, 1: 0.07, 2: 0.14, 3: 0.10, 4: 0.08, 5: 0.07, 6: 0.06, 7: 0.055, 8: 0.05, 9: 0.05}
+_ORDER = {
+    10: ["BTN", "SB", "BB", "UTG", "UTG+1", "UTG+2", "MP", "LJ", "HJ", "CO"],
+    9: ["BTN", "SB", "BB", "UTG", "UTG+1", "MP", "LJ", "HJ", "CO"],
+    8: ["BTN", "SB", "BB", "UTG", "UTG+1", "LJ", "HJ", "CO"],
+    7: ["BTN", "SB", "BB", "UTG", "LJ", "HJ", "CO"],
+    6: ["BTN", "SB", "BB", "UTG", "HJ", "CO"],
+    5: ["BTN", "SB", "BB", "HJ", "CO"],
+    4: ["BTN", "SB", "BB", "CO"],
+    3: ["BTN", "SB", "BB"],
+    2: ["BTN", "BB"],
+}
+
+
+def behind(pos, n=6):
+    """Players left to act after this position preflop (including the blinds)."""
+    if pos == "BB":
+        return 0
+    if pos == "SB":
+        return 1
+    if pos == "BTN":
+        return 2 if n > 2 else 1
+    names = _ORDER.get(n, _ORDER[6])
+    if pos not in names:
+        return 4
+    return n - names.index(pos) + 2
+
+
+def open_pct(pos, n=6):
+    return OPEN_BY_BEHIND.get(behind(pos, n), 0.085)
+
+
+def call_pct(pos, n=6):
+    return CALL_BY_BEHIND.get(behind(pos, n), 0.05)
 BASE_3BET = 0.05
 BASE_4BET = 0.022
 
@@ -63,7 +101,7 @@ def preflop_band(view, seat, loose=1.0):
     if kind is None or kind == "check":
         band = (0.0, 1.0)
     elif kind == "open":
-        band = (0.0, BASE_OPEN.get(pos, 0.2) * 1.1)
+        band = (0.0, open_pct(pos, len(view["positions"]) or 6) * 1.1)
     elif kind == "limp":
         band = (0.02, 0.6) if pos != "SB" else (0.0, 0.75)
     elif kind == "call":

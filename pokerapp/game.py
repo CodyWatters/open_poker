@@ -24,6 +24,7 @@ STAKES = [
 ]
 STAKES_BY_ID = {s["id"]: s for s in STAKES}
 HERO_SEAT = 1
+MIN_SEATS, MAX_SEATS = 4, 10  # each new table gets a random number of players
 
 
 def _pos_sort(p):
@@ -197,7 +198,7 @@ class Game:
             raises = {"open": 0, "vs_raise": 1, "vs_3bet": 2}.get(sit, 0)
         sit = {0: "open", 1: "vs_raise"}.get(raises, "vs_3bet")
         bb_unopened = pos == "BB" and raises == 0
-        chart = preflop_chart(pos, raises, bb_unopened)
+        chart = preflop_chart(pos, raises, bb_unopened, n=(h.n if h else 6))
         # headline in plain words
         if raises == 0:
             if bb_unopened:
@@ -256,10 +257,11 @@ class Table:
         self.hero = Player(HERO_SEAT, game.hero_name, stakes["buyin"], is_hero=True)
         self.players = [self.hero]
         self.bots = {}
-        for seat in range(1, 7):
+        self.n_seats = self.rng.randint(MIN_SEATS, MAX_SEATS)
+        for seat in range(1, self.n_seats + 1):
             if seat != HERO_SEAT:
                 self._seat_bot(seat)
-        self.button = self.rng.randint(1, 6)
+        self.button = self.rng.randint(1, self.n_seats)
         self.hand = None
         self.observed = {}
         self.hands_played = 0
@@ -302,7 +304,7 @@ class Table:
                 "desc": (h.descriptions.get(p.seat) if h and h.done and h.showdown and not p.folded else None),
             })
         out = {
-            "table_name": self.table_name, "stakes": self.stakes, "session_id": self.sid,
+            "table_name": self.table_name, "stakes": self.stakes, "session_id": self.sid, "n_seats": self.n_seats,
             "hand_id": h.id if h else None, "button": self.button,
             "street": h.street if h else None,
             "board": [card_str(c) for c in h.board] if h else [],
@@ -441,7 +443,7 @@ class Table:
         return {
             "id": h.id, "ts": now(), "session_id": self.sid, "table_name": self.table_name,
             "stakes_id": self.stakes["id"], "sb": h.sb, "bb": h.bb, "buyin": self.stakes["buyin"],
-            "button_seat": h.button_seat, "hero_seat": self.hero.seat, "seats": seats,
+            "button_seat": h.button_seat, "hero_seat": self.hero.seat, "seats": seats, "max_seats": self.n_seats,
             "actions": h.actions, "board": list(h.board), "pots": h.pots,
             "collected": {str(k): v for k, v in h.collected.items()},
             "showdown": h.showdown,

@@ -1,6 +1,6 @@
 # Vegas 6-Max
 
-Local 6-max no-limit hold'em against bots, with a bankroll, four stake levels, and full hand-history analysis.
+Local no-limit hold'em against bots (4 to 10 players per table), with a bankroll, four stake levels, and full hand-history analysis.
 
 No installs needed. It only uses Python 3.9+ (already on most Macs).
 
@@ -24,6 +24,7 @@ You can also double-click `play.command` in Finder.
 
 - You start with a **$1,000 bankroll**.
 - There are four tables: **$1K, $5K, $25K, $100K** buy-ins. Blinds are 1/100 of the buy-in, so everyone starts with 100 big blinds.
+- Every time you sit down, the table gets a random number of players: 4 to 10. Ranges, advice and bots adjust to the table size (for example, first to act at a 10-player table plays much tighter than at 6).
 - Sitting down takes the buy-in from your bankroll. **Leave table** puts your stack back. A new table means fresh opponents who all start with the buy-in.
 - A bot that busts gets replaced by a new one with a fresh stack.
 - If your total chips (bankroll + table stack) fall under $200, a **Buy $1,000** button appears in the lobby. You can use it as many times as you need; the lobby counts how many.

@@ -5,6 +5,10 @@ from .cards import evaluate, describe
 
 STREETS = ["preflop", "flop", "turn", "river"]
 POSITION_NAMES = {
+    10: ["BTN", "SB", "BB", "UTG", "UTG+1", "UTG+2", "MP", "LJ", "HJ", "CO"],
+    9: ["BTN", "SB", "BB", "UTG", "UTG+1", "MP", "LJ", "HJ", "CO"],
+    8: ["BTN", "SB", "BB", "UTG", "UTG+1", "LJ", "HJ", "CO"],
+    7: ["BTN", "SB", "BB", "UTG", "LJ", "HJ", "CO"],
     6: ["BTN", "SB", "BB", "UTG", "HJ", "CO"],
     5: ["BTN", "SB", "BB", "HJ", "CO"],
     4: ["BTN", "SB", "BB", "CO"],

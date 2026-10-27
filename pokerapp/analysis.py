@@ -4,7 +4,7 @@ from itertools import combinations
 
 from .cards import evaluate, hand_class, cards_str
 from .ranges import (estimate_range, equity_vs_ranges, equity_vs_hands, hand_pct, has_draw,
-                     BASE_OPEN, BASE_CALL)
+                     open_pct, call_pct)
 
 PLAYER_ACTS = ("fold", "check", "call", "bet", "raise")
 ANALYSIS_VERSION = 2
@@ -154,13 +154,14 @@ def _pct_txt(x):
 
 
 def grade_preflop(rec, a, idx, hole, pos):
+    n = len(rec["seats"])
     raises = _preflop_ctx(rec["actions"], idx)
     pct = hand_pct(hole)
     cls = hand_class(hole)
     t = a["type"]
     out = []
     if raises == 0:
-        open_r = BASE_OPEN.get(pos, 0.2)
+        open_r = open_pct(pos, n)
         if pos == "BB":
             pass
         elif t == "fold" and pct < open_r * 0.8:
@@ -172,7 +173,7 @@ def grade_preflop(rec, a, idx, hole, pos):
         elif t == "call" and pos != "SB":
             out.append(("note", "Open-limp: raising or folding is usually better than limping."))
     elif raises == 1:
-        call_r = BASE_CALL.get(pos, 0.1)
+        call_r = call_pct(pos, n)
         if t == "fold" and pct < 0.03:
             out.append(("mistake", "Folded a premium hand (%s) to a single raise." % cls))
         elif t == "call" and pct > call_r * 2 and pos != "BB":
@@ -199,7 +200,7 @@ def _same(hero_action, rec_action):
     return a == b
 
 
-def should_have(street, hero_action, hole, pos, raises_before, to_call, req, eq, opps, draw, bb, was_pfr=False):
+def should_have(street, hero_action, hole, pos, raises_before, to_call, req, eq, opps, draw, bb, was_pfr=False, n=6):
     """Return {'action', 'label', 'why', 'match', 'close'} in plain language."""
     cls = hand_class(hole)
     pc = lambda x: "%d%%" % round(x * 100)
@@ -213,7 +214,7 @@ def should_have(street, hero_action, hole, pos, raises_before, to_call, req, eq,
                 else:
                     act, label, why = "check", "Check", "You can see the flop for free with %s." % cls
             else:
-                rng = BASE_OPEN.get(pos, 0.2)
+                rng = open_pct(pos, n)
                 if pct < rng:
                     act, label = "raise", "Raise (about %s)" % ("3x the big blind" if pos == "SB" else "2.5x the big blind")
                     why = "%s is strong enough to open from %s (top %s of hands). Raise rather than just call." % (cls, pos, pc(rng))
@@ -223,7 +224,7 @@ def should_have(street, hero_action, hole, pos, raises_before, to_call, req, eq,
                     why = "%s is too weak to play from %s. Good players fold it here." % (cls, pos)
                     close = pct < rng * 1.15
         elif raises_before == 1:
-            call_r = BASE_CALL.get(pos, 0.1)
+            call_r = call_pct(pos, n)
             if pct < 0.05:
                 act, label, why = "raise", "Re-raise (3-bet)", "%s is a premium hand. Re-raise to build a bigger pot." % cls
             elif pct < call_r:
@@ -349,7 +350,7 @@ def analyze(rec, rng=None, samples=1200):
             "board": cards_str(board), "flags": [{"level": l, "text": t} for l, t in flags],
             "call_ev": round(eq_r * (pot + to_call) - to_call, 2) if to_call else None,
             "should": should_have(street, a["type"], hole, pos, _preflop_ctx(rec["actions"], idx) if street == "preflop" else 0,
-                                  to_call, req, eq_r, len(opps), has_draw(hole, board), rec["bb"], was_pfr=(pfr == hero)),
+                                  to_call, req, eq_r, len(opps), has_draw(hole, board), rec["bb"], was_pfr=(pfr == hero), n=len(rec["seats"])),
         })
     ev = allin_ev(rec, rng)
     mistakes = sum(1 for d in decisions for f in d["flags"] if f["level"] == "mistake")
@@ -382,7 +383,7 @@ def aggregate(rows):
 
     overall = block(rows)
     by_pos = {}
-    for p in ["UTG", "HJ", "CO", "BTN", "SB", "BB"]:
+    for p in ["UTG", "UTG+1", "UTG+2", "MP", "LJ", "HJ", "CO", "BTN", "SB", "BB"]:
         rs = [r for r in rows if r["facts"].get("position") == p]
         if rs:
             by_pos[p] = block(rs)
@@ -416,12 +417,12 @@ def _rep_hole(cls):
     return [r1 * 4, r2 * 4 + 1]
 
 
-def preflop_chart(pos, raises_before, bb_unopened=False):
+def preflop_chart(pos, raises_before, bb_unopened=False, n=6):
     """{hand_class: 'raise'|'call'|'check'|'fold'} using the same advice logic as hand analysis."""
     from .preflop_data import ORDER
     out = {}
     for cls in ORDER:
         sh = should_have("preflop", "fold", _rep_hole(cls), pos, raises_before,
-                         0 if bb_unopened else 1, 0, 0, 1, False, 1)
+                         0 if bb_unopened else 1, 0, 0, 1, False, 1, n=n)
         out[cls] = sh["action"]
     return out

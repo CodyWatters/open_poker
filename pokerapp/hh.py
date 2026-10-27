@@ -36,7 +36,7 @@ def to_pokerstars(rec):
     L = []
     L.append("PokerStars Hand #%d:  Hold'em No Limit (%s/%s USD) - %s"
              % (hand_number(rec), _m(rec["sb"]), _m(rec["bb"]), _ts(rec)))
-    L.append("Table '%s' 6-max Seat #%d is the button" % (rec["table_name"], rec["button_seat"]))
+    L.append("Table '%s' %d-max Seat #%d is the button" % (rec["table_name"], rec.get("max_seats", 6), rec["button_seat"]))
     for s in sorted(seats):
         L.append("Seat %d: %s (%s in chips)" % (s, name(s), _m(seats[s]["start_stack"])))
     acts = rec["actions"]

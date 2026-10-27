@@ -17,7 +17,7 @@ LABELS = {"vpip": "VPIP (voluntarily put $ in pot)", "pfr": "PFR (preflop raise)
 
 PROMPT = """# Poker hand analysis pack
 
-You are reviewing hands I played in **6-max No-Limit Hold'em cash games against bots** in a local app.
+You are reviewing hands I played in **No-Limit Hold'em cash games (4-10 players per table) against bots** in a local app.
 Everyone starts each table with 100 big blinds. Stakes: $1K table = $5/$10, $5K = $25/$50, $25K = $125/$250, $100K = $500/$1,000.
 I am the player marked `is_hero` / named "{hero}".
 
@@ -108,7 +108,7 @@ def build_pack(db, where, args, hero_name="Hero"):
     L = ["# Summary", "", "Generated %s. Hands: %d. Net: $%s (%s bb/100). All-in-luck-adjusted net: $%s."
          % (datetime.now().strftime("%Y-%m-%d %H:%M"), o["hands"], "{:,}".format(o["net"]), o["bb100"],
             "{:,.0f}".format(agg["series"][-1][2]) if agg["series"] else "0"), ""]
-    L += ["## My stats vs. typical solid 6-max regular", "", "| Stat | Me | Typical |", "|---|---|---|"]
+    L += ["## My stats vs. typical solid 6-max regular (full tables run tighter)", "", "| Stat | Me | Typical |", "|---|---|---|"]
     for k in ["vpip", "pfr", "three_bet", "af", "wtsd", "wsd", "cbet", "fold_to_cbet"]:
         v = o.get(k)
         L.append("| %s | %s | %s |" % (LABELS[k], (v if k == "af" else _pct(v)) if v is not None else "-", REFS[k]))

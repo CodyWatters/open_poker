@@ -6,7 +6,7 @@ These are strong heuristic bots, not a game-theory solver.
 """
 import random
 
-from .ranges import (BASE_OPEN, BASE_CALL, BASE_3BET, BASE_4BET, hand_pct,
+from .ranges import (open_pct, call_pct, BASE_3BET, BASE_4BET, hand_pct,
                      estimate_range, equity_vs_ranges, has_draw)
 
 ARCHETYPES = {
@@ -132,7 +132,7 @@ class Bot:
             return ("check", 0) if L["can_check"] else ("fold", 0)
 
         if raises == 0:
-            open_r = min(0.95, BASE_OPEN.get(pos, 0.2) * P.open_mult)
+            open_r = min(0.95, open_pct(pos, hand.n) * P.open_mult)
             if limpers:
                 open_r *= 0.65
             if pos == "BB":
@@ -159,7 +159,7 @@ class Bot:
         if raises == 1:
             late = raiser_pos in ("CO", "BTN", "SB")
             tb = BASE_3BET * P.tb_mult * (1.5 if late else 1.0) * min(1.6, loose)
-            call_r = BASE_CALL.get(pos, 0.1) * P.call_mult * min(1.5, loose ** 0.5)
+            call_r = call_pct(pos, hand.n) * P.call_mult * min(1.5, loose ** 0.5)
             call_r *= min(1.0, 3.0 / max(size_bb, 2.0)) ** 0.8
             if callers:
                 call_r *= 1.15
