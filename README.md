@@ -17,7 +17,6 @@ cd open_poker
 python3 server.py
 ```
 
-<img width="974" height="840" alt="image" src="https://github.com/user-attachments/assets/5738cddb-d5dc-471e-a9bf-642c01bb8cb5" />
 
 Your browser opens at http://localhost:8765. Stop with `Ctrl+C`.
 You can also double-click `play.command` in Finder.
@@ -96,3 +95,7 @@ pokerapp/hh.py       PokerStars hand-history export
 static/              the browser UI
 data/                your database and hand-history files (created on first run)
 ```
+
+<img width="974" height="840" alt="image" src="https://github.com/user-attachments/assets/5738cddb-d5dc-471e-a9bf-642c01bb8cb5" />
+
+<img width="1436" height="698" alt="image" src="https://github.com/user-attachments/assets/ae97a6f7-ba89-4a97-a2d1-022de926b850" />
