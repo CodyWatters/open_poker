@@ -17,6 +17,8 @@ cd open_poker
 python3 server.py
 ```
 
+<img width="974" height="840" alt="image" src="https://github.com/user-attachments/assets/5738cddb-d5dc-471e-a9bf-642c01bb8cb5" />
+
 Your browser opens at http://localhost:8765. Stop with `Ctrl+C`.
 You can also double-click `play.command` in Finder.
 
