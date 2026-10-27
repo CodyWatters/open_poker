@@ -402,3 +402,26 @@ def aggregate(rows):
             cum_nsd += r["net"]
         series.append([k + 1, round(cum, 2), round(cum_ev, 2), round(cum_sd, 2), round(cum_nsd, 2), r["id"]])
     return {"overall": overall, "by_position": by_pos, "by_stakes": by_stakes, "series": series}
+
+
+# ------------------------------------------------------------------ preflop range chart (13x13)
+def _rep_hole(cls):
+    """Two concrete cards for a hand class like 'AKs', 'AKo', 'TT'."""
+    from .cards import RANKS
+    r1, r2 = RANKS.index(cls[0]), RANKS.index(cls[1])
+    if len(cls) == 2:
+        return [r1 * 4, r2 * 4 + 1]
+    if cls[2] == "s":
+        return [r1 * 4, r2 * 4]
+    return [r1 * 4, r2 * 4 + 1]
+
+
+def preflop_chart(pos, raises_before, bb_unopened=False):
+    """{hand_class: 'raise'|'call'|'check'|'fold'} using the same advice logic as hand analysis."""
+    from .preflop_data import ORDER
+    out = {}
+    for cls in ORDER:
+        sh = should_have("preflop", "fold", _rep_hole(cls), pos, raises_before,
+                         0 if bb_unopened else 1, 0, 0, 1, False, 1)
+        out[cls] = sh["action"]
+    return out

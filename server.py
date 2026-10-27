@@ -101,6 +101,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, GAME.lobby())
         if path == "/api/state":
             return self._send(200, GAME.state())
+        if path == "/api/preflop_ranges":
+            g = lambda k: (qs.get(k) or [None])[0] or None
+            return self._send(200, GAME.preflop_ranges(g("pos"), g("sit")))
         if path == "/api/sessions":
             return self._send(200, db.sessions(500))
         if path == "/api/hands":

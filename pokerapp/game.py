@@ -156,6 +156,76 @@ class Game:
             out["net"] = cash - t.stakes["buyin"]
             return out
 
+    def preflop_ranges(self, pos=None, sit=None):
+        """Suggested preflop chart for your seat and what's happened before you (or a chosen scenario)."""
+        from .analysis import preflop_chart
+        from .cards import hand_class
+        with self.lock:
+            t = self.table
+            h = t.hand if t else None
+            hero_seat = t.hero.seat if t else None
+            ctx = {"raises": 0, "limpers": 0, "callers": 0, "raiser_pos": None, "raise_to_bb": None,
+                   "hero_pos": h.positions.get(hero_seat) if h else None,
+                   "hero_class": hand_class(t.hero.hole) if (h and t.hero.hole) else None}
+            if h:
+                pre = [a for a in h.actions if a["street"] == "preflop"]
+                hero_acts = [k for k, a in enumerate(pre) if a["seat"] == hero_seat and
+                             a["type"] in ("fold", "check", "call", "bet", "raise")]
+                hero_to_act = (not h.done and h.street == "preflop" and h.actor() is t.hero)
+                cut = len(pre) if (hero_to_act or not hero_acts) else hero_acts[-1]
+                for a in pre[:cut]:
+                    if a["seat"] == hero_seat:
+                        continue
+                    if a["type"] == "raise":
+                        ctx["raises"] += 1
+                        ctx["raiser_pos"] = h.positions.get(a["seat"])
+                        ctx["raise_to_bb"] = round(a["to"] / h.bb, 1)
+                        ctx["callers"] = 0
+                    elif a["type"] == "call":
+                        if ctx["raises"] == 0:
+                            ctx["limpers"] += 1
+                        else:
+                            ctx["callers"] += 1
+        waiting = bool(h and not h.done and h.street == "preflop" and h.actor() is not t.hero
+                       and not any(a["seat"] == hero_seat and a["type"] in ("fold", "check", "call", "raise")
+                                   for a in h.actions))
+        auto = pos is None and sit is None
+        pos = pos or ctx["hero_pos"] or "BTN"
+        if sit is None:
+            raises = min(ctx["raises"], 2) if auto else 0
+        else:
+            raises = {"open": 0, "vs_raise": 1, "vs_3bet": 2}.get(sit, 0)
+        sit = {0: "open", 1: "vs_raise"}.get(raises, "vs_3bet")
+        bb_unopened = pos == "BB" and raises == 0
+        chart = preflop_chart(pos, raises, bb_unopened)
+        # headline in plain words
+        if raises == 0:
+            if bb_unopened:
+                head = "Nobody raised. You're in the big blind: check or raise."
+            elif auto and ctx["limpers"]:
+                head = "%d player%s limped (just called). Raise or fold." % (ctx["limpers"], "s" if ctx["limpers"] > 1 else "")
+            else:
+                head = "Folded to you: raise or fold (don't just call)."
+        elif raises == 1:
+            if auto and ctx["raiser_pos"]:
+                head = "Facing a raise from %s to %sbb%s." % (
+                    ctx["raiser_pos"], ctx["raise_to_bb"],
+                    (" plus %d caller%s" % (ctx["callers"], "s" if ctx["callers"] > 1 else "")) if ctx["callers"] else "")
+            else:
+                head = "Facing a single raise."
+        else:
+            head = "Facing a re-raise (3-bet or more): only continue with strong hands."
+        if auto and waiting:
+            head = "So far (others still acting): " + head[0].lower() + head[1:]
+        from .ranges import CLASS_PCT
+        size = lambda c: 6 if len(c) == 2 else (4 if c.endswith("s") else 12)
+        counts = {}
+        for c, act in chart.items():
+            counts[act] = counts.get(act, 0) + size(c)
+        return {"pos": pos, "sit": sit, "auto": auto, "headline": head, "hero_class": ctx["hero_class"],
+                "hero_pos": ctx["hero_pos"], "chart": chart,
+                "pct": {k: round(100 * v / 1326, 1) for k, v in counts.items()}}
+
     def state(self):
         with self.lock:
             if not self.table:

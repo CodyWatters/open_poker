@@ -166,7 +166,7 @@ table.list tr.click:hover td { background: #1b2222; }
 .sizer input[type=range] { width: 130px; min-width: 50px; flex: 1 1 130px; accent-color: var(--gold); }
 .sizer button { padding: 6px 10px; font-size: 15px; white-space: nowrap; flex: none; }
 .result-banner { font: 700 22px var(--serif); }
-.log { height: calc(100vh - 420px); min-height: 180px; overflow: auto; font-size: 14.5px; font-family: var(--mono); }
+.log { flex: 1 1 auto; height: auto; min-height: 70px; overflow: auto; font-size: 14.5px; font-family: var(--mono); }
 .log div { padding: 2px 0; border-bottom: 1px dashed #222a2a; }
 .log .sep { color: var(--gold); border-bottom: none; padding-top: 8px; }
 .log .hero { color: var(--gold2); }
@@ -246,7 +246,8 @@ details summary { cursor: pointer; color: var(--gold2); margin: 8px 0; }
 /* ---------- larger table: bigger board, pot, seats, bets ---------- */
 #felt .felt-outer { height: clamp(330px, calc(100vh - 440px), 560px); margin: 76px 96px 82px; }
 #felt .felt .center { top: 43%; }
-.table-wrap { grid-template-columns: 1fr 260px; }
+.table-wrap { grid-template-columns: minmax(0, 1fr) 360px; }
+.table-wrap > div { min-width: 0; }
 #felt .felt .card { width: 66px; height: 92px; border-radius: 8px; margin: 0 4px; }
 #felt .felt .card b { font-size: 34px; } #felt .felt .card i { font-size: 30px; margin-top: 4px; }
 #felt .felt .board { min-height: 92px; }
@@ -280,3 +281,52 @@ details summary { cursor: pointer; color: var(--gold2); margin: 8px 0; }
 .should.ok { background: #173a2a; border-color: var(--win); color: #d5f5e4; }
 .should.close { background: #3a3218; border-color: var(--warn); color: #fbecc6; }
 .should.bad { background: #4a1f1f; border-color: var(--loss); color: #ffd6d6; }
+
+/* preflop range chart */
+.ranges-modal .modal, .rankings-modal .modal { width: min(720px, 100%); }
+.rg-head { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; font-size: 16px; }
+.rg-sit { margin-top: 4px; font-size: 18px; font-weight: 700; color: var(--gold2); }
+.rgrid { display: grid; grid-template-columns: repeat(13, 1fr); gap: 2px; }
+.rc { font: 700 13px var(--mono); text-align: center; padding: 8px 0; border-radius: 3px; color: #e9ece8; }
+.rc.raise { background: #b8402f; } .rc.call { background: #2f7a52; } .rc.check { background: #2d4f7a; } .rc.fold { background: #262d2d; color: #6c7774; }
+.rc.mine { outline: 3px solid #fff; outline-offset: -1px; position: relative; z-index: 1; box-shadow: 0 0 12px #fffa; }
+.rg-legend { margin: 0 0 10px; }
+.rg-legend .sq { display: inline-block; width: 14px; height: 14px; padding: 0; margin-right: 6px; vertical-align: -2px; }
+.rg-legend .sq.mine { background: transparent; }
+/* hand rankings */
+.rk-row { display: grid; grid-template-columns: 28px 1fr auto 60px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.rk-n { font: 700 18px var(--mono); color: var(--gold2); text-align: center; }
+.rk-name b { font-size: 17px; } .rk-name .muted { font-size: 13px; }
+.rk-p { text-align: right; font-family: var(--mono); }
+.card.sm2 { width: 34px; height: 48px; border-radius: 5px; margin: 0 1px; }
+.card.sm2 b { font-size: 17px; } .card.sm2 i { font-size: 14px; margin-top: 1px; }
+
+/* side panel: settings, log, docked study aids (always-on when toggled) */
+.sidepanel { display: flex; flex-direction: column; height: calc(100vh - 140px); min-height: 360px; padding: 12px 14px; overflow-y: auto; }
+.sidepanel h3 { margin: 0 0 6px; font-size: 16px; }
+.sidepanel .settings { flex-direction: row; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; padding-bottom: 8px; }
+.sidepanel .keys { line-height: 1.8; font-size: 12px; width: 100%; }
+.dock-toggles { display: flex; gap: 6px; margin-top: 8px; }
+.dock-toggles .toggle { flex: 1; padding: 5px 8px; font-size: 13px; }
+.dock-toggles .toggle.on { border-color: var(--gold); color: var(--gold2); background: #3a3218; }
+.dock { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; flex: none; }
+.dock-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; line-height: 1.35; }
+.dock-head b { color: var(--text); } .dock-head span { color: var(--gold2); }
+.dock-legend { display: flex; gap: 10px; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.dock-legend i { display: inline-block; width: 9px; height: 9px; padding: 0; margin-right: 4px; border-radius: 2px; }
+.rgrid.mini { gap: 1px; }
+.rgrid.mini .rc { font-size: 8.5px; padding: 3px 0; border-radius: 2px; letter-spacing: -.3px; }
+.rgrid.mini .rc.mine { outline-width: 2px; }
+.rk-mini { display: grid; grid-template-columns: 14px 104px 1fr 42px; gap: 6px; align-items: center; font-size: 12px; padding: 1px 0; }
+.rk-mini .n { color: var(--gold2); font-weight: 700; } .rk-mini .p { text-align: right; color: var(--muted); font-family: var(--mono); font-size: 11px; }
+.rk-mini .mini { font-size: 12px; }
+
+/* keep the action bar on one line in narrower windows */
+.actionbar #a-call { min-width: 130px; }
+.actionbar #a-raise { min-width: 150px; }
+.actionbar .big { padding: 10px 14px; min-width: 90px; }
+.actionbar .sizer input[type=number] { width: 84px; }
+.actionbar .sizer button { padding: 6px 8px; }
+
+.sidepanel details.keys summary { cursor: pointer; color: var(--muted); font-size: 12px; margin: 0; }
+.sidepanel details.keys[open] summary { margin-bottom: 4px; }

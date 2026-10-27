@@ -47,6 +47,11 @@ Each table draws bots from these types. Higher stakes have tougher ones:
 How the bots decide: position-based preflop ranges, then postflop Monte Carlo equity against the ranges your actions suggest.
 They're strong heuristic bots, **not** a game-theory solver. Bot types are hidden at the table and shown when you review a hand.
 
+## Study aids (at the table, under the action log)
+
+- **Preflop ranges**: a 13×13 chart (AA down to 22) colored raise / call / check / fold. It follows your seat and what players before you did (folded to you, limpers, a raise, a re-raise) and outlines your current hand. Untick "Follow my current hand" to explore any seat or situation.
+- **Hand rankings**: cheat sheet from four of a kind down to high card, with examples and how often each hand happens.
+
 ## Analyzing your hands
 
 Every hand is saved in `data/poker.db` (SQLite) and also appended as PokerStars-format text to `data/hand_histories/`.

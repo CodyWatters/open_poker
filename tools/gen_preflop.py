@@ -22,7 +22,22 @@ for a in range(52):
     for b in range(a):
         reps.setdefault(hand_class([a, b]), [a, b])
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 6000
-scores = {k: equity(v, 1, N, rng) / 0.5 + equity(v, 2, N, rng) / 0.3333 for k, v in reps.items()}
+RK = "23456789TJQKA"
+
+
+def playability(k):
+    """Small bonus for suited and connected hands, which play better than raw equity suggests."""
+    if len(k) == 2:
+        return 0.0
+    gap = RK.index(k[0]) - RK.index(k[1])
+    bonus = 0.07 if k[2] == "s" else 0.0
+    if k[2] == "s" and k[0] == "A":
+        bonus += 0.03          # suited aces: nut flush + wheel potential
+    bonus += {1: 0.04, 2: 0.025, 3: 0.01}.get(gap, 0.0)
+    return bonus
+
+
+scores = {k: equity(v, 1, N, rng) / 0.5 + equity(v, 2, N, rng) / 0.3333 + playability(k) for k, v in reps.items()}
 order = sorted(scores, key=lambda k: -scores[k])
 out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pokerapp", "preflop_data.py")
 with open(out, "w") as f:

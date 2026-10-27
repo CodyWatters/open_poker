@@ -233,11 +233,28 @@ async function showTable() {
       <div class="settings muted">
         <label><input type="checkbox" id="auto" ${auto ? "checked" : ""}> Auto-deal next hand</label>
         <label>Speed <select id="speed">${Object.keys(SPEEDS).map(k => `<option ${k === speed ? "selected" : ""}>${k}</option>`).join("")}</select></label>
-        <div class="keys"><span class="kbd">F</span> fold <span class="kbd">C</span> check/call <span class="kbd">R</span> raise <span class="kbd">Enter</span> confirm <span class="kbd">Space</span> next/speed up <span class="kbd">A</span> analyze</div>
+        <details class="keys"><summary>Keyboard shortcuts</summary><span class="kbd">F</span> fold <span class="kbd">C</span> check/call <span class="kbd">R</span> raise <span class="kbd">Enter</span> confirm <span class="kbd">Space</span> next/speed up <span class="kbd">A</span> analyze</details>
       </div>
       <h3>Action log</h3><div class="log" id="log"></div>
+      <div class="dock-toggles">
+        <button id="tg-ranges" class="toggle ${store.get("dock_ranges", false) ? "on" : ""}">Preflop ranges</button>
+        <button id="tg-rank" class="toggle ${store.get("dock_rank", false) ? "on" : ""}">Hand rankings</button>
+      </div>
+      <div id="dock-ranges" class="dock" ${store.get("dock_ranges", false) ? "" : "hidden"}></div>
+      <div id="dock-rank" class="dock" ${store.get("dock_rank", false) ? "" : "hidden"}></div>
     </div>
   </div>`;
+  const toggleDock = (key, btn, box, render) => {
+    const on = !store.get(key, false);
+    store.set(key, on);
+    $(btn).classList.toggle("on", on);
+    $(box).hidden = !on;
+    if (on) render();
+  };
+  $("#tg-ranges").onclick = () => toggleDock("dock_ranges", "#tg-ranges", "#dock-ranges", renderRangesDock);
+  $("#tg-rank").onclick = () => toggleDock("dock_rank", "#tg-rank", "#dock-rank", renderRankDock);
+  if (store.get("dock_rank", false)) renderRankDock();
+  if (store.get("dock_ranges", false)) renderRangesDock();
   $("#auto").onchange = e => store.set("autodeal", e.target.checked);
   $("#speed").onchange = e => store.set("speed", e.target.value);
   let armed = false;
@@ -319,6 +336,9 @@ function renderLog() {
 }
 
 function drawTable(f, prev) {
+  if (store.get("dock_ranges", false) && (!prev || prev.hand_id !== f.hand_id || f.street === "preflop")) {
+    clearTimeout(drawTable._rt); drawTable._rt = setTimeout(renderRangesDock, 200);
+  }
   if (!f) return;
   $("#tname").textContent = f.table_name;
   $("#tblinds").textContent = `$${f.stakes.sb.toLocaleString()}/$${f.stakes.bb.toLocaleString()} NL · 6-max`;
@@ -475,6 +495,47 @@ function spawnCallouts(prev, f) {
     d.addEventListener("animationend", () => d.remove());
     fx.appendChild(d);
   }
+}
+
+
+/* ------------------------------------------------------------------ preflop range chart + hand rankings */
+const ACT_STYLE = { raise: "Raise", call: "Call", check: "Check", fold: "Fold" };
+async function renderRangesDock() {
+  const box = $("#dock-ranges");
+  if (!box || box.hidden) return;
+  let r;
+  try { r = await api("/api/preflop_ranges"); } catch (e) { return; }
+  const key = JSON.stringify([r.pos, r.headline, r.hero_class]);
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  const R = "AKQJT98765432";
+  let grid = "";
+  for (let i = 0; i < 13; i++) for (let j = 0; j < 13; j++) {
+    const c = i === j ? R[i] + R[j] : i < j ? R[i] + R[j] + "s" : R[j] + R[i] + "o";
+    const act = r.chart[c] || "fold";
+    grid += `<div class="rc ${act} ${c === r.hero_class ? "mine" : ""}" title="${c}: ${ACT_STYLE[act]}">${c}</div>`;
+  }
+  box.innerHTML = `
+    <div class="dock-head"><b>${r.pos}</b>${r.hero_class ? ` · ${r.hero_class}` : ""} · <span>${esc(r.headline)}</span></div>
+    <div class="dock-legend">${["raise", "call", "check", "fold"].filter(a => r.pct[a]).map(a => `<span><i class="rc ${a}"></i>${ACT_STYLE[a]} ${Math.round(r.pct[a])}%</span>`).join("")}</div>
+    <div class="rgrid mini">${grid}</div>`;
+}
+const RANKINGS = [
+  ["Four of a kind", "Qs Qh Qd Qc 7s", "0.17%"],
+  ["Full house", "Ks Kh Kd 4c 4s", "2.6%"],
+  ["Flush", "Ah Jh 8h 6h 2h", "3.0%"],
+  ["Straight", "9c 8d 7s 6h 5c", "4.6%"],
+  ["Three of a kind", "7c 7d 7h Ks 2d", "4.8%"],
+  ["Two pair", "Jc Jd 5h 5s Ac", "23.5%"],
+  ["One pair", "Ts Th Ac 8d 4s", "43.8%"],
+  ["High card", "Ad Jc 9s 6h 3c", "17.4%"],
+];
+function renderRankDock() {
+  const box = $("#dock-rank");
+  if (!box) return;
+  box.innerHTML = `
+    <div class="dock-head">Best to worst · straight/royal flush beat all</div>
+    ${RANKINGS.map(([n, cs, p], k) => `<div class="rk-mini"><span class="n">${k + 1}</span><span class="nm">${n}</span>${miniCards(cs)}<span class="p">${p}</span></div>`).join("")}`;
 }
 
 /* ------------------------------------------------------------------ chip animations */
