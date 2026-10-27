@@ -157,7 +157,7 @@ function lerp(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) 
 function renderFelt(el, st, opts = {}) {
   const heroSeat = (st.seats.find(s => s.is_hero) || st.seats[0]).seat;
   const center = [50, 50];
-  let html = `<div class="felt-outer"><div class="felt"><div class="logo">VEGAS 6-MAX</div>
+  let html = `<div class="felt-outer"><div class="felt">
     <div class="center"><div class="board">${[0, 1, 2, 3, 4].map(i => st.board[i] ? cardHTML(st.board[i]) : `<span class="card ghost"></span>`).join("")}</div>
     <div class="pot">Pot ${fmt(st.pot)}</div></div>`;
   for (const s of st.seats) {
@@ -185,12 +185,12 @@ function renderFelt(el, st, opts = {}) {
         ${opts.labels && s.label ? `<div class="label">${esc(s.label)}</div>` : ""}
       </div></div>`;
     if (s.bet > 0) {
-      const b = lerp(center, p, 0.58);
+      const b = betXY(s.seat, heroSeat);
       html += `<div class="betchip" data-seat="${s.seat}" style="left:${b[0]}%;top:${b[1]}%">${fmt(s.bet)}</div>`;
     }
     if (s.seat === st.button) {
-      const d = lerp(center, p, 0.66);
-      html += `<div class="dealer" style="left:${d[0] + (p[0] < 50 ? 6 : -6)}%;top:${d[1] + 4}%">D</div>`;
+      const d = dealerXY(s.seat, heroSeat);
+      html += `<div class="dealer" style="left:${d[0]}%;top:${d[1]}%">D</div>`;
     }
   }
   html += `</div></div>`;
@@ -395,7 +395,7 @@ function drawActions(f) {
     status = `<span class="muted">You folded · hand in progress…</span>`;
     right = `<button class="primary" id="a-speed" ${T.turbo ? "disabled" : ""}>${T.turbo ? "Speeding up…" : "Speed up"}</button>`;
   } else if (L) {
-    status = `<span class="muted num">Your turn · pot ${fmt(L.pot)}${L.to_call ? ` · to call ${fmt(L.to_call)} · pot odds ${pct(L.to_call / (L.pot + L.to_call))}` : ""}</span>`;
+    status = L.to_call ? `<span class="muted num">Pot odds ${pct(L.to_call / (L.pot + L.to_call))}</span>` : "";
   } else {
     status = canPre
       ? (T.pre ? `<span style="color:var(--gold2)">Pre-selected: <b>${T.pre === "fold" ? "Fold (checks if free)" : "Check"}</b>. Click again to cancel.</span>`
@@ -411,10 +411,10 @@ function drawActions(f) {
       <button class="big call ${T.pre === "check" ? "queued" : ""}" id="a-call" ${L || canPre ? "" : "disabled"}>${callLabel}</button>
       <button class="big primary" id="a-raise" ${canRaise ? "" : "disabled"}>${raiseWord} <span id="rto">${canRaise ? fmt(def) : ""}</span></button>
       <div class="sizer">
+        <input type="number" id="amt" min="${minTo}" max="${maxTo}" step="${unit}" value="${canRaise ? def : ""}" ${canRaise ? "" : "disabled"}>
+        <input type="range" id="slider" min="${minTo}" max="${maxTo}" step="${unit}" value="${def}" ${canRaise ? "" : "disabled"}>
         ${presets.map(([n, v]) => `<button data-to="${canRaise ? round(v) : 0}" ${canRaise ? "" : "disabled"}>${n}</button>`).join("")}
         <button data-to="${maxTo}" ${canRaise ? "" : "disabled"}>All-in</button>
-        <input type="range" id="slider" min="${minTo}" max="${maxTo}" step="${unit}" value="${def}" ${canRaise ? "" : "disabled"}>
-        <input type="number" id="amt" min="${minTo}" max="${maxTo}" step="${unit}" value="${canRaise ? def : ""}" ${canRaise ? "" : "disabled"}>
       </div>
     </div>
     <div class="status"><div class="st-left">${status}</div><div>${right}</div></div>`;
@@ -485,7 +485,8 @@ function spawnCallouts(prev, f) {
     const word = { fold: "FOLD", check: "CHECK", call: "CALL", bet: "BET", raise: "RAISE", allin: "ALL-IN" }[kind];
     const amt = s.bet > 0 && kind !== "fold" && kind !== "check" ? " " + fmt(s.bet) : "";
     const seatP = seatXY(s.seat, hs);
-    const from = px(lerp([50, 50], seatP, 0.92)), to = px(lerp([50, 50], seatP, 0.42));
+    const isHero = s.seat === hs;
+    const from = px(lerp([50, 50], seatP, 0.92)), to = px(isHero ? [73, 80] : lerp([50, 50], seatP, 0.55));
     const d = document.createElement("div");
     d.className = "callout " + kind;
     d.textContent = word + amt;
@@ -541,7 +542,13 @@ function renderRankDock() {
 /* ------------------------------------------------------------------ chip animations */
 const POT_XY = [50, 57];
 function heroSeatOf(f) { return (f.seats.find(s => s.is_hero) || f.seats[0]).seat; }
-function betXY(seat, hs) { return lerp([50, 50], seatXY(seat, hs), 0.58); }
+// your own seat (bottom) has big cards, so its chip and dealer button sit beside them
+function betXY(seat, hs) { return seat === hs ? [65, 74] : lerp([50, 50], seatXY(seat, hs), 0.58); }
+function dealerXY(seat, hs) {
+  if (seat === hs) return [35, 80];
+  const p = seatXY(seat, hs), d = lerp([50, 50], p, 0.66);
+  return [d[0] + (p[0] < 50 ? 6 : -6), d[1] + 4];
+}
 function seatChipXY(seat, hs) { return lerp([50, 50], seatXY(seat, hs), 0.9); }
 function flyChip(felt, from, to, label, dur) {
   const d = document.createElement("div");

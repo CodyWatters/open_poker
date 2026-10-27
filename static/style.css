@@ -330,3 +330,13 @@ details summary { cursor: pointer; color: var(--gold2); margin: 8px 0; }
 
 .sidepanel details.keys summary { cursor: pointer; color: var(--muted); font-size: 12px; margin: 0; }
 .sidepanel details.keys[open] summary { margin-bottom: 4px; }
+
+/* ---- borders instead of glows, smaller callouts, bigger hero cards ---- */
+.seat.acting .box { border-color: var(--gold); box-shadow: 0 4px 14px #0008; outline: 4px solid var(--gold); outline-offset: -1px; }
+.seat.winner .box { border-color: var(--win); box-shadow: 0 4px 14px #0008; outline: 4px solid var(--win); outline-offset: -1px; }
+.callout { font-size: 21px; padding: 6px 12px; border-radius: 9px; border-width: 2px; }
+#felt .felt .seat.hero .cards { height: 104px; }
+#felt .felt .seat.hero .cards .card { width: 74px; height: 104px; border-radius: 9px; margin: 0 3px; }
+#felt .felt .seat.hero .cards .card b { font-size: 40px; }
+#felt .felt .seat.hero .cards .card i { font-size: 34px; margin-top: 4px; }
+.actionbar .sizer { justify-content: flex-start; }
