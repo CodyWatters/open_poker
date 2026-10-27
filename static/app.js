@@ -777,12 +777,12 @@ async function openAnalysis(id) {
       <b class="num ${cls(rec.hero_net)}" style="font-size:22px">${sfmt(rec.hero_net)}</b>
     </div>
     <div style="margin-bottom:10px;font-size:17px">${an ? (improveCount(an) ? `<b class="neg">${improveCount(an)} decision${improveCount(an) > 1 ? "s" : ""} to improve</b>` : `<b class="pos">You played this hand well</b>`) : ""}</div>
-    <div class="panel" style="margin-bottom:12px">
-      <h3>Everyone's cards</h3>
+    <details class="panel collapsible" style="margin-bottom:12px">
+      <summary><h3>Everyone's cards</h3><span class="chev" aria-hidden="true"></span></summary>
       <table class="list">${rec.seats.map(s => `<tr><td><b>${s.position}</b></td><td>${esc(s.name)}${s.is_hero ? " (you)" : ""}</td>
         <td>${miniCards(s.hole_str.join(" "))}</td><td class="muted">${s.is_hero ? "" : esc(s.archetype_label || "")}</td>
         <td class="num ${cls(s.end_stack - s.start_stack)}">${s.end_stack !== s.start_stack ? sfmt(s.end_stack - s.start_stack) : ""}</td></tr>`).join("")}</table>
-    </div>
+    </details>
     ${allinHTML(an)}
     <h3>Your decisions</h3>
     <p class="muted" style="font-size:14px;margin:4px 0 10px"><b>Equity vs ranges</b> = what you could know at the table. <b>Equity vs actual</b> = hindsight vs their real cards. Orange line = equity needed to call.</p>

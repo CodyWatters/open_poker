@@ -201,6 +201,14 @@ table.list tr.click:hover td { background: #1b2222; }
 pre.hh { white-space: pre-wrap; font: 14px/1.5 var(--mono); background: #0b0e0e; border: 1px solid var(--line); border-radius: 8px; padding: 12px; max-height: 420px; overflow: auto; }
 details summary { cursor: pointer; color: var(--gold2); margin: 8px 0; }
 
+/* collapsible panel with chevron (e.g. "Everyone's cards") */
+details.collapsible > summary { display: flex; align-items: center; gap: 8px; margin: 0; color: inherit; list-style: none; user-select: none; }
+details.collapsible > summary::-webkit-details-marker { display: none; }
+details.collapsible > summary h3 { margin: 0; flex: 1; }
+details.collapsible > summary .chev { width: 9px; height: 9px; border-right: 2px solid var(--gold2); border-bottom: 2px solid var(--gold2); transform: rotate(-45deg); transition: transform .15s ease; margin-right: 4px; }
+details.collapsible[open] > summary .chev { transform: rotate(45deg); }
+details.collapsible[open] > summary { margin-bottom: 10px; }
+
 /* stats */
 .kpis { grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); margin-bottom: 16px; }
 .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
