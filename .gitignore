@@ -1,0 +1,25 @@
+# Your local play data (database + hand histories). Never commit.
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# Secrets / local config
+.env
+.env.*
+
+# Exports you may save into the folder
+*.zip
+*.log
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
