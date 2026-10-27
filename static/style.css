@@ -322,6 +322,13 @@ details.collapsible[open] > summary { margin-bottom: 10px; }
 .dock-head b { color: var(--text); } .dock-head span { color: var(--gold2); }
 .dock-legend { display: flex; gap: 10px; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
 .dock-legend i { display: inline-block; width: 9px; height: 9px; padding: 0; margin-right: 4px; border-radius: 2px; }
+/* live EV dock */
+.dock .eqrow { grid-template-columns: 112px 1fr 44px; font-size: 13px; gap: 6px; }
+.dock .eqbar { height: 14px; }
+.ev-grid { display: flex; gap: 16px; margin-top: 4px; font-size: 14px; }
+.ev-grid span i { display: block; font-style: normal; font-size: 11px; color: var(--muted); }
+.dock .should { margin-top: 6px; padding: 6px 8px; font-size: 13px; }
+.ev-note { margin-top: 5px; font-size: 11px; line-height: 1.35; color: var(--muted); }
 .rgrid.mini { gap: 1px; }
 .rgrid.mini .rc { font-size: 8.5px; padding: 3px 0; border-radius: 2px; letter-spacing: -.3px; }
 .rgrid.mini .rc.mine { outline-width: 2px; }

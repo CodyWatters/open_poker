@@ -7,7 +7,8 @@ from .ranges import (estimate_range, equity_vs_ranges, equity_vs_hands, hand_pct
                      open_pct, call_pct)
 
 PLAYER_ACTS = ("fold", "check", "call", "bet", "raise")
-ANALYSIS_VERSION = 2
+ANALYSIS_VERSION = 3
+SAMPLES = 10000  # Monte Carlo deals per decision, for both the live table readout and the hand review
 
 
 def _positions(rec):
@@ -127,7 +128,7 @@ def allin_ev(rec, rng):
     if need <= 2:
         runouts = [list(c) for c in combinations(deck, need)]
     else:
-        runouts = [rng.sample(deck, need) for _ in range(2500)]
+        runouts = [rng.sample(deck, need) for _ in range(SAMPLES)]
     tot = 0.0
     for ro in runouts:
         tot += _award(board + ro, holes, rec["pots"]).get(hero, 0)
@@ -280,7 +281,31 @@ def should_have(street, hero_action, hole, pos, raises_before, to_call, req, eq,
     match = _same(hero_action, act) or (close and hero_action != "fold" and act != "fold")
     return {"action": act, "label": label, "why": why, "match": bool(match), "close": bool(close)}
 
-def analyze(rec, rng=None, samples=1200):
+
+def decision_equity(view, hole, opp_seats, samples=SAMPLES, rng=None):
+    """Hero's equity vs. the estimated ranges of the given seats. Works from a live hand or a stored record."""
+    board = view["board"]
+    dead = set(hole) | set(board)
+    ranges = [estimate_range(view, s, dead, postflop=True) for s in opp_seats]
+    return equity_vs_ranges(hole, board, ranges, samples=samples, rng=rng)
+
+
+def live_decision(view, hole, pos, opp_seats, street, to_call, pot, was_pfr=False, samples=SAMPLES, rng=None):
+    """What the review would say about the spot hero is facing right now. No hindsight: ranges only."""
+    board = view["board"]
+    eq = decision_equity(view, hole, opp_seats, samples=samples, rng=rng)
+    req = to_call / (pot + to_call) if to_call else 0.0
+    raises = _preflop_ctx(view["actions"], len(view["actions"])) if street == "preflop" else 0
+    sh = should_have(street, "fold", hole, pos, raises, to_call, req, eq, len(opp_seats), has_draw(hole, board),
+                     view["bb"], was_pfr=was_pfr, n=len(view["positions"]))
+    return {
+        "eq_range": round(eq, 4), "req": round(req, 4), "samples": samples, "opponents": len(opp_seats),
+        "call_ev": round(eq * (pot + to_call) - to_call, 2) if to_call else None,
+        "should": {"action": sh["action"], "label": sh["label"], "why": sh["why"], "close": sh["close"]},
+    }
+
+
+def analyze(rec, rng=None, samples=SAMPLES):
     rng = rng or random.Random(rec["id"])
     hero = rec["hero_seat"]
     holes = _holes(rec)
@@ -300,10 +325,8 @@ def analyze(rec, rng=None, samples=1200):
         view = {"positions": positions, "actions": rec["actions"][:idx], "board": board, "bb": rec["bb"]}
         folded = _folded_before(rec, idx)
         opps = [s["seat"] for s in rec["seats"] if s["seat"] != hero and s["seat"] not in folded and s["hole"]]
-        dead = set(hole) | set(board)
-        ranges = [estimate_range(view, s, dead, postflop=True) for s in opps]
-        eq_r = equity_vs_ranges(hole, board, ranges, samples=samples, rng=rng)
-        eq_a = equity_vs_hands(hole, board, [holes[s] for s in opps], samples=2000, rng=rng)
+        eq_r = decision_equity(view, hole, opps, samples=samples, rng=rng)
+        eq_a = equity_vs_hands(hole, board, [holes[s] for s in opps], samples=samples, rng=rng)
         to_call = a.get("to_call", 0)
         pot = a.get("pot_before", 0)
         req = to_call / (pot + to_call) if to_call else 0.0

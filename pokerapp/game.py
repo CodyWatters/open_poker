@@ -5,7 +5,7 @@ import random
 import threading
 from datetime import datetime, timezone
 
-from .analysis import analyze, hand_facts
+from .analysis import analyze, hand_facts, live_decision
 from .bots import Bot, NAMES, random_profile
 from .cards import cards_str, card_str
 from .db import DB, now
@@ -232,6 +232,30 @@ class Game:
             if not self.table:
                 return {"seated": False}
             return {"seated": True, "frames": [self.table.frame(None)]}
+
+    def live_ev(self):
+        """Monte Carlo readout for the decision you're facing right now. Uses only what you could know
+        at the table (estimated ranges, never the bots' cards). {"active": False} when it isn't your turn."""
+        with self.lock:
+            t = self.table
+            h = t.hand if t else None
+            if not h or h.done or h.actor() is not t.hero:
+                return {"active": False}
+            hero = t.hero
+            L = h.legal(hero)
+            view = {"positions": dict(h.positions), "actions": list(h.actions), "board": list(h.board), "bb": h.bb}
+            opps = [p.seat for p in h.players if p is not hero and not p.folded and p.hole]
+            hole, pos, street = list(hero.hole), h.positions[hero.seat], h.street
+            pfr = None
+            for a in h.actions:
+                if a["street"] == "preflop" and a["type"] == "raise":
+                    pfr = a["seat"]
+            key = {"hand_id": h.id, "n_actions": len(h.actions)}
+            to_call, pot = L["to_call"], L["pot"]
+        # simulate outside the lock so acting and dealing never wait on it
+        out = live_decision(view, hole, pos, opps, street, to_call, pot, was_pfr=(pfr == hero.seat))
+        out.update(key, active=True, street=street, pot=pot, to_call=to_call)
+        return out
 
     def act(self, action, amount=None):
         with self.lock:

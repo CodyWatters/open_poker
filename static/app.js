@@ -252,9 +252,11 @@ async function showTable() {
       </div>
       <h3>Action log</h3><div class="log" id="log"></div>
       <div class="dock-toggles">
+        <button id="tg-ev" class="toggle ${store.get("dock_ev", true) ? "on" : ""}">Live EV</button>
         <button id="tg-ranges" class="toggle ${store.get("dock_ranges", false) ? "on" : ""}">Preflop ranges</button>
         <button id="tg-rank" class="toggle ${store.get("dock_rank", false) ? "on" : ""}">Hand rankings</button>
       </div>
+      <div id="dock-ev" class="dock" ${store.get("dock_ev", true) ? "" : "hidden"}></div>
       <div id="dock-ranges" class="dock" ${store.get("dock_ranges", false) ? "" : "hidden"}></div>
       <div id="dock-rank" class="dock" ${store.get("dock_rank", false) ? "" : "hidden"}></div>
     </div>
@@ -266,6 +268,7 @@ async function showTable() {
     $(box).hidden = !on;
     if (on) render();
   };
+  $("#tg-ev").onclick = () => toggleDock("dock_ev", "#tg-ev", "#dock-ev", () => renderEvDock(T.cur));
   $("#tg-ranges").onclick = () => toggleDock("dock_ranges", "#tg-ranges", "#dock-ranges", renderRangesDock);
   $("#tg-rank").onclick = () => toggleDock("dock_rank", "#tg-rank", "#dock-rank", renderRankDock);
   if (store.get("dock_rank", false)) renderRankDock();
@@ -369,6 +372,7 @@ function drawActions(f) {
   clearTimeout(T.autoTimer);
   const busy = T.playing && T.frames.length;
   const L = !busy && !f.hand_over && !f.busted ? f.legal : null;
+  if (store.get("dock_ev", true)) renderEvDock(f, L);
   const bb = f.stakes.bb, unit = f.stakes.sb;
   const hero = f.seats.find(s => s.is_hero);
   // controls row (always the same layout; disabled when it isn't your turn)
@@ -513,6 +517,46 @@ function spawnCallouts(prev, f) {
   }
 }
 
+
+/* ------------------------------------------------------------------ live EV (Monte Carlo at each of your decisions) */
+const EV = { key: null, data: null };
+async function renderEvDock(f, L) {
+  const box = $("#dock-ev");
+  if (!box || box.hidden || !f) return;
+  if (L === undefined) { const busy = T.playing && T.frames.length; L = !busy && !f.hand_over && !f.busted ? f.legal : null; }
+  if (!L) {
+    const hero = f.seats.find(s => s.is_hero);
+    const msg = f.hand_over ? "Hand over. Runs again at your next decision." : hero && hero.folded ? "You folded." : "Runs when it's your turn.";
+    box.innerHTML = `<div class="dock-head">Live EV · <span>${msg}</span></div>`;
+    EV.key = null;
+    return;
+  }
+  const key = [f.hand_id, f.street, L.pot, L.to_call, L.current_bet, f.seats.filter(s => s.in_hand && !s.folded).length].join("|");
+  const loading = `<div class="dock-head">Live EV · <span>Running 10,000 deals…</span></div>`;
+  if (EV.key === key) { box.innerHTML = EV.data ? evHTML(EV.data) : loading; return; }
+  EV.key = key; EV.data = null;
+  box.innerHTML = loading;
+  let r;
+  try { r = await api("/api/live_ev"); } catch (e) { return; }
+  if (EV.key !== key || !r.active || r.hand_id !== f.hand_id) return;  // you already acted; result is stale
+  EV.data = r;
+  const b = $("#dock-ev");
+  if (b && !b.hidden) b.innerHTML = evHTML(r);
+}
+function evHTML(r) {
+  const sh = r.should, street = r.street[0].toUpperCase() + r.street.slice(1);
+  const evs = r.to_call ? `<div class="ev-grid num">
+      <span><i>Need</i>${pct(r.req)}</span>
+      <span title="Equity × (pot + call) − call: what calling is worth if there were no more betting"><i>Call EV</i><b class="${cls(r.call_ev)}">${sfmt(r.call_ev)}</b></span>
+      <span><i>Fold EV</i><b class="muted">$0</b></span></div>` : "";
+  // preflop advice follows position ranges, which raw equity alone doesn't capture
+  const note = r.street === "preflop" && r.to_call && (r.call_ev > 0) !== (sh.action !== "fold")
+    ? `<div class="ev-note">Call EV assumes no more betting. The preflop suggestion follows position ranges, which also weigh players still to act and play after the flop.</div>` : "";
+  return `<div class="dock-head"><b>${street}</b> · ${r.opponents} opponent${r.opponents === 1 ? "" : "s"} · <span>${r.samples.toLocaleString()} deals</span></div>
+    ${eqRow("Equity vs. ranges", r.eq_range, r.req, "")}
+    ${evs}
+    <div class="should ${sh.close ? "close" : "ok"}"><b>${sh.close ? "Close spot · " : "Suggested: "}${esc(sh.label)}</b><div>${esc(sh.why)}</div></div>${note}`;
+}
 
 /* ------------------------------------------------------------------ preflop range chart + hand rankings */
 const ACT_STYLE = { raise: "Raise", call: "Call", check: "Check", fold: "Fold" };
