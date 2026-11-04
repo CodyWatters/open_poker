@@ -2,7 +2,7 @@
 import random
 from itertools import combinations
 
-from .cards import evaluate, hand_class, cards_str
+from .cards import evaluate, hand_class, cards_str, describe
 from .ranges import (estimate_range, equity_vs_ranges, equity_vs_hands, hand_pct, has_draw,
                      open_pct, call_pct)
 
@@ -137,6 +137,81 @@ def allin_ev(rec, rng):
     eq = equity_vs_hands(holes[hero], board, [holes[s] for s in live if s != hero], rng=rng)
     return {"ev_net": round(exp - invested, 2), "equity": round(eq, 4), "board_len": lock,
             "actual_net": rec["hero_net"], "luck": round(rec["hero_net"] - (exp - invested), 2)}
+
+
+# ------------------------------------------------------------------ luck vs. decisions
+def _true_runout(board, deck_left):
+    """The cards that really would have come, burns included. deck_left is dealt from the end."""
+    deck, out = list(deck_left), list(board)
+    while len(out) < 5:
+        deck.pop()  # burn
+        for _ in range(3 if not out else 1):
+            out.append(deck.pop())
+    return out
+
+
+FOLD_VERDICTS = {  # (fold was right, what would have happened)
+    (True, "lose"): ("earned", "Good fold", "You'd have lost, so folding saved you money."),
+    (True, "win"): ("unlucky", "Good fold, even though you'd have won",
+                    "That win would have been luck. With what you knew, folding was right, and it saves money over many hands."),
+    (True, "tie"): ("earned", "Good fold", "You'd have tied, and folding was right with what you knew."),
+    (True, None): ("earned", "Good fold", "With what you knew, folding was right."),
+    (False, "win"): ("costly", "Bad fold", "You'd have won, and the odds said to stay in."),
+    (False, "lose"): ("lucky", "Bad fold, but it didn't cost you",
+                      "You'd have lost this time, but the odds said to stay in. Staying in pays off over many hands."),
+    (False, "tie"): ("lucky", "Bad fold", "You'd have tied this time, but the odds said to stay in."),
+    (False, None): ("costly", "Bad fold", "The odds said to stay in."),
+}
+PLAYED_VERDICTS = {  # (no mistakes, won money)
+    (True, True): ("earned", "Good decisions, good result", "You played it right and it paid off."),
+    (True, False): ("unlucky", "Good decisions, bad luck", "You lost money, but you played it right. Keep making these decisions."),
+    (False, True): ("lucky", "You won, but got lucky", "You made at least one bad decision and won anyway. Don't count on that next time."),
+    (False, False): ("costly", "Your decisions cost you", "You made at least one bad decision, and it cost you in this hand."),
+}
+
+
+def luck_check(rec, an, rng=None):
+    """Separates the decision from the result. Judges decisions on what you knew at the time, then says
+    what the cards did. After a fold, plays the hand out against the players who stayed to the end."""
+    decisions = (an or {}).get("decisions") or []
+    if not decisions:
+        return None
+    last = decisions[-1]
+    if last["action"] != "fold":
+        if not rec["hero_net"]:
+            return None
+        good = all(d["should"]["match"] for d in decisions)
+        kind, title, text = PLAYED_VERDICTS[(good, rec["hero_net"] > 0)]
+        return {"folded": False, "kind": kind, "title": title, "text": text}
+
+    rng = rng or random.Random(rec["id"])
+    hero = rec["hero_seat"]
+    holes = _holes(rec)
+    gone = {a["seat"] for a in rec["actions"] if a["type"] == "fold"}
+    live = [s["seat"] for s in rec["seats"] if s["seat"] not in gone and s["hole"]]
+    if not live:
+        return None
+    fold = rec["actions"][last["i"]]
+    at_fold = rec["board"][:fold["board_len"]]
+    chance = equity_vs_hands(holes[hero], at_fold, [holes[s] for s in live], samples=SAMPLES, rng=rng)
+    board = None
+    if len(rec["board"]) == 5:
+        board = list(rec["board"])
+    elif rec.get("deck_left"):
+        board = _true_runout(rec["board"], rec["deck_left"])
+    would = hero_hand = best_hand = None
+    if board:
+        best = max(evaluate(holes[s] + board) for s in live)
+        mine = evaluate(holes[hero] + board)
+        would = "win" if mine > best else "tie" if mine == best else "lose"
+        hero_hand, best_hand = describe(mine), describe(best)
+    good = bool(last["should"]["match"])
+    kind, title, text = FOLD_VERDICTS[(good, would)]
+    names = {s["seat"]: s["name"] for s in rec["seats"]}
+    return {"folded": True, "kind": kind, "title": title, "text": text, "would": would,
+            "street": last["street"], "price": fold.get("to_call", 0), "chance": round(chance, 4),
+            "board": cards_str(board) if board else None, "known": cards_str(at_fold),
+            "hero_hand": hero_hand, "best_hand": best_hand, "vs": [names[s] for s in live]}
 
 
 # ------------------------------------------------------------------ decisions

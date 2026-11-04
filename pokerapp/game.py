@@ -468,7 +468,7 @@ class Table:
             "id": h.id, "ts": now(), "session_id": self.sid, "table_name": self.table_name,
             "stakes_id": self.stakes["id"], "sb": h.sb, "bb": h.bb, "buyin": self.stakes["buyin"],
             "button_seat": h.button_seat, "hero_seat": self.hero.seat, "seats": seats, "max_seats": self.n_seats,
-            "actions": h.actions, "board": list(h.board), "pots": h.pots,
+            "actions": h.actions, "board": list(h.board), "deck_left": list(h.deck), "pots": h.pots,
             "collected": {str(k): v for k, v in h.collected.items()},
             "showdown": h.showdown,
             "descriptions": {str(k): v for k, v in (h.descriptions or {}).items()},

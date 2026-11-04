@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlparse
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
-from pokerapp.analysis import aggregate, analyze, ANALYSIS_VERSION  # noqa: E402
+from pokerapp.analysis import aggregate, analyze, luck_check, ANALYSIS_VERSION  # noqa: E402
 from pokerapp.cards import card_str  # noqa: E402
 from pokerapp.game import Game, STAKES  # noqa: E402
 from pokerapp.hh import hand_number  # noqa: E402
@@ -122,6 +122,7 @@ class Handler(BaseHTTPRequestHandler):
                 r["analysis"] = analyze(r["record"])
                 db.save_analysis(hid, r["analysis"])
             rec = r["record"]
+            r["luck"] = luck_check(rec, r["analysis"])
             for s in rec["seats"]:
                 s["hole_str"] = [card_str(c) for c in s["hole"]]
             rec["board_cards"] = [card_str(c) for c in rec["board"]]
