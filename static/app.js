@@ -80,6 +80,12 @@ async function showLobby() {
       <div class="muted">Bankroll</div>
       <div class="big">${fmt(l.bankroll)}</div>
       <div class="muted">Started with $1,000${l.topups ? ` · bought $1,000 ${l.topups} time${l.topups > 1 ? "s" : ""}` : ""}</div>
+      ${l.tony_debt ? `<div class="muted">You owe Uncle Tony <b class="neg">${fmt(l.tony_debt)}</b></div>` : ""}
+      ${l.tony_debt && l.bankroll > 0 ? `<div class="row" style="margin-top:12px">
+        <input id="tony-amt" type="number" min="1" max="${Math.min(l.tony_debt, l.bankroll)}" value="${Math.min(l.tony_debt, l.bankroll)}" style="width:100px">
+        <button id="tony-pay">Pay Uncle Tony back</button></div>` : ""}
+      ${l.can_cry ? `<div class="row" style="margin-top:12px"><button class="primary" id="tony">Cry to Uncle Tony</button>
+        <span class="muted">Borrow $1,000 and keep all your hands and stats.</span></div>` : ""}
       ${l.can_topup ? `<div class="row" style="margin-top:12px"><button class="primary" id="topup">Buy $1,000</button>
         <span class="muted">Available because you're under $200.</span></div>` : ""}
       <div class="row" style="margin-top:12px">
@@ -120,6 +126,21 @@ async function showLobby() {
       T.reset(); T.pending = r.frames; location.hash = "#table";
     } catch (e) { toast(e.message); b.disabled = false; }
   });
+  const tony = $("#tony");
+  if (tony) tony.onclick = async () => {
+    tony.disabled = true;
+    try { const r = await api("/api/cry_to_tony", {}); toast(`Uncle Tony lent you $1,000. You owe ${fmt(r.tony_debt)}.`, 3500); route(); }
+    catch (e) { toast(e.message); tony.disabled = false; }
+  };
+  const pay = $("#tony-pay");
+  if (pay) pay.onclick = async () => {
+    pay.disabled = true;
+    try {
+      const r = await api("/api/pay_tony", { amount: +$("#tony-amt").value });
+      toast(r.tony_debt ? `Paid. You still owe ${fmt(r.tony_debt)}.` : "Paid in full. Uncle Tony is proud of you.", 3500);
+      route();
+    } catch (e) { toast(e.message); pay.disabled = false; }
+  };
   const tu = $("#topup");
   if (tu) tu.onclick = async () => {
     try { await api("/api/topup", {}); toast("Added $1,000 to your bankroll"); route(); } catch (e) { toast(e.message); }

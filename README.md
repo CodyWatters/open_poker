@@ -36,6 +36,7 @@ You can also double-click `play.command` in Finder.
 - Sitting down takes the buy-in from your bankroll. **Leave table** puts your stack back. A new table means fresh opponents who all start with the buy-in.
 - A bot that busts gets replaced by a new one with a fresh stack.
 - If your total chips (bankroll + table stack) fall under $200, a **Buy $1,000** button appears in the lobby. You can use it as many times as you need; the lobby counts how many.
+- If you can't afford any table (total chips under $1,000), **Cry to Uncle Tony** in the lobby lends you $1,000 so you can keep playing with all your hands and stats. The lobby tracks how much you owe, and **Pay Uncle Tony back** repays any amount from your bankroll.
 - **Erase everything and start over** (in the lobby) deletes all hands, stats and hand-history files and resets you to $1,000.
 - If you stop the server while seated, your stack from the last finished hand is cashed out the next time you start it.
 

@@ -206,6 +206,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, GAME.leave())
         if path == "/api/topup":
             return self._send(200, GAME.top_up())
+        if path == "/api/cry_to_tony":
+            return self._send(200, GAME.cry_to_tony())
+        if path == "/api/pay_tony":
+            try:
+                amount = int(b.get("amount"))
+            except (TypeError, ValueError):
+                raise ValueError("Enter an amount to pay.")
+            return self._send(200, GAME.pay_tony(amount))
         if path == "/api/erase_all":
             return self._send(200, GAME.erase_all())
         if path == "/api/hero_name":

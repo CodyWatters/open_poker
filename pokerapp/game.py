@@ -77,12 +77,15 @@ class Game:
             "table_stack": self.table.hero.stack if self.table else None,
             "topups": self.db.get("topups", 0),
             "can_topup": self.total_chips() < self.TOPUP_BELOW,
+            "tony_debt": self.db.get("tony_debt", 0),
+            "can_cry": self.total_chips() < self.cheapest_table(),
             "sessions": self.db.sessions(25),
             "bankroll_log": self.db.q("SELECT id, ts, kind, amount, balance, note FROM bankroll_log ORDER BY id"),
         }
 
     TOPUP_BELOW = 200
     TOPUP_AMOUNT = 1000
+    TONY_LOAN = 1000
 
     def total_chips(self):
         return self.db.bankroll() + (self.table.hero.stack if self.table else 0)
@@ -96,6 +99,35 @@ class Game:
             self.db.set("topups", self.db.get("topups", 0) + 1)
             return self.lobby()
 
+    def cheapest_table(self):
+        return min(s["buyin"] for s in STAKES)
+
+    def cry_to_tony(self):
+        """Borrow $1,000 from Uncle Tony when you can't afford any table. Keeps your history; the debt is tracked."""
+        with self.lock:
+            if self.total_chips() >= self.cheapest_table():
+                raise ValueError("Uncle Tony says you can still afford a table.")
+            debt = self.db.get("tony_debt", 0) + self.TONY_LOAN
+            self.db.change_bankroll(self.TONY_LOAN, "tony", "Borrowed from Uncle Tony")
+            self.db.set("tony_debt", debt)
+            return self.lobby()
+
+    def pay_tony(self, amount):
+        """Pay Uncle Tony back from your bankroll (chips at a table don't count)."""
+        with self.lock:
+            debt, bank = self.db.get("tony_debt", 0), self.db.bankroll()
+            if not debt:
+                raise ValueError("You don't owe Uncle Tony anything.")
+            if amount < 1:
+                raise ValueError("Enter an amount to pay.")
+            if amount > bank:
+                raise ValueError("You only have %s in your bankroll." % "${:,}".format(bank))
+            if amount > debt:
+                raise ValueError("You only owe %s." % "${:,}".format(debt))
+            self.db.change_bankroll(-amount, "tony_repay", "Paid back Uncle Tony")
+            self.db.set("tony_debt", debt - amount)
+            return self.lobby()
+
     def erase_all(self):
         """Erase everything (hands, sessions, stats, hand-history files) and start over at $1,000."""
         with self.lock:
@@ -104,7 +136,7 @@ class Game:
             with self.db.lock:
                 for t in ("hands", "sessions", "bankroll_log"):
                     self.db.conn.execute("DELETE FROM %s" % t)
-                self.db.conn.execute("DELETE FROM settings WHERE key IN ('bankroll', 'resets', 'topups')")
+                self.db.conn.execute("DELETE FROM settings WHERE key IN ('bankroll', 'resets', 'topups', 'tony_debt')")
                 self.db.conn.commit()
             hh_dir = os.path.join(self.data_dir, "hand_histories")
             for f in os.listdir(hh_dir):
