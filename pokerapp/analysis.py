@@ -4,7 +4,7 @@ from itertools import combinations
 
 from .cards import evaluate, hand_class, cards_str
 from .ranges import (estimate_range, equity_vs_ranges, equity_vs_hands, hand_pct, has_draw,
-                     open_pct, call_pct)
+                     open_pct, call_pct, behind)
 
 PLAYER_ACTS = ("fold", "check", "call", "bet", "raise")
 ANALYSIS_VERSION = 3
@@ -201,6 +201,11 @@ def _same(hero_action, rec_action):
     return a == b
 
 
+def value_threshold(opps):
+    """Equity needed to bet for value: about 60% heads-up, more with extra opponents."""
+    return 0.60 + 0.07 * max(0, opps - 1)
+
+
 def should_have(street, hero_action, hole, pos, raises_before, to_call, req, eq, opps, draw, bb, was_pfr=False, n=6):
     """Return {'action', 'label', 'why', 'match', 'close'} in plain language."""
     cls = hand_class(hole)
@@ -243,7 +248,7 @@ def should_have(street, hero_action, hole, pos, raises_before, to_call, req, eq,
             else:
                 act, label, why = "fold", "Fold", "Facing a re-raise, %s is usually beaten. Fold." % cls
     else:
-        value_t = 0.60 + 0.07 * max(0, opps - 1)
+        value_t = value_threshold(opps)
         if to_call:
             implied = 0.05 if (draw and street != "river") else 0.0
             if eq >= 0.72 + 0.05 * max(0, opps - 1):
@@ -276,7 +281,7 @@ def should_have(street, hero_action, hole, pos, raises_before, to_call, req, eq,
                 close = True
             else:
                 act, label = "check", "Check"
-                why = "Your hand is about %s. Not strong enough to bet for value, so check." % pc(eq)
+                why = "You win about %s of the time against what they likely hold. Not strong enough to bet for value, so check." % pc(eq)
                 close = eq > value_t - 0.05
     match = _same(hero_action, act) or (close and hero_action != "fold" and act != "fold")
     return {"action": act, "label": label, "why": why, "match": bool(match), "close": bool(close)}
@@ -290,18 +295,26 @@ def decision_equity(view, hole, opp_seats, samples=SAMPLES, rng=None):
     return equity_vs_ranges(hole, board, ranges, samples=samples, rng=rng)
 
 
-def live_decision(view, hole, pos, opp_seats, street, to_call, pot, was_pfr=False, samples=SAMPLES, rng=None):
-    """What the review would say about the spot hero is facing right now. No hindsight: ranges only."""
+def live_decision(view, hole, pos, opp_seats, street, to_call, pot, was_pfr=False, samples=SAMPLES, rng=None,
+                  hero_action="fold"):
+    """What the review would say about the spot hero is facing right now. No hindsight: ranges only.
+    Pass the action hero is about to take and should["match"] grades it, the same way the review does."""
     board = view["board"]
     eq = decision_equity(view, hole, opp_seats, samples=samples, rng=rng)
     req = to_call / (pot + to_call) if to_call else 0.0
     raises = _preflop_ctx(view["actions"], len(view["actions"])) if street == "preflop" else 0
-    sh = should_have(street, "fold", hole, pos, raises, to_call, req, eq, len(opp_seats), has_draw(hole, board),
+    sh = should_have(street, hero_action, hole, pos, raises, to_call, req, eq, len(opp_seats), has_draw(hole, board),
                      view["bb"], was_pfr=was_pfr, n=len(view["positions"]))
+    n = len(view["positions"])
+    play = None  # the range the preflop advice compares your hand with
+    if street == "preflop" and not (pos == "BB" and not to_call):
+        play = open_pct(pos, n) if raises == 0 else call_pct(pos, n) if raises == 1 else 0.07
     return {
         "eq_range": round(eq, 4), "req": round(req, 4), "samples": samples, "opponents": len(opp_seats),
+        "pos": pos, "left": behind(pos, n), "raises": raises, "hand": hand_class(hole),
+        "hand_pct": round(hand_pct(hole), 4), "play_pct": play, "bet_at": round(value_threshold(len(opp_seats)), 2),
         "call_ev": round(eq * (pot + to_call) - to_call, 2) if to_call else None,
-        "should": {"action": sh["action"], "label": sh["label"], "why": sh["why"], "close": sh["close"]},
+        "should": {"action": sh["action"], "label": sh["label"], "why": sh["why"], "close": sh["close"], "match": sh["match"]},
     }
 
 

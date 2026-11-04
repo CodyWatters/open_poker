@@ -63,6 +63,7 @@ async function route() {
     else if (name === "hands") await showHands(params);
     else if (name === "hand") await showHand(+arg);
     else if (name === "stats") await showStats(params);
+    else if (name === "learn") await showLearn();
     else await showLobby();
   } catch (e) {
     view.innerHTML = `<div class="panel empty">Error: ${esc(e.message)}</div>`;
@@ -191,7 +192,7 @@ function renderFelt(el, st, opts = {}) {
     html += `<div class="seat ${s.folded ? "folded" : ""} ${acting ? "acting" : ""} ${s.is_hero ? "hero" : ""} ${winner ? "winner" : ""}" style="left:${p[0]}%;top:${p[1]}%">
       <div class="cards">${cards}</div>
       <div class="box">
-        ${s.position ? `<span class="tag">${s.position}</span>` : ""}
+        ${s.position ? `<span class="tag" title="${esc(seatName(s.position))}">${s.position}</span>` : ""}
         ${word && last !== "fold" ? `<span class="act ${last}">${word}</span>` : ""}
         <div class="name">${esc(s.name)}</div>
         <div class="stack">${s.all_in && s.stack === 0 ? "ALL-IN" : fmt(s.stack)}</div>
@@ -245,18 +246,20 @@ async function showTable() {
       <div class="panel actionbar" id="actions"></div>
     </div>
     <div class="panel sidepanel">
+      <div id="companion" hidden></div>
       <div class="settings muted">
         <label><input type="checkbox" id="auto" ${auto ? "checked" : ""}> Auto-deal next hand</label>
+        <label title="Walks through the odds on your turn, then rates your move as soon as you act."><input type="checkbox" id="companion-on" ${companionOn() ? "checked" : ""}> Easy mode</label>
         <label>Speed <select id="speed">${Object.keys(SPEEDS).map(k => `<option ${k === speed ? "selected" : ""}>${k}</option>`).join("")}</select></label>
         <details class="keys"><summary>Keyboard shortcuts</summary><span class="kbd">F</span> fold <span class="kbd">C</span> check/call <span class="kbd">R</span> raise <span class="kbd">Enter</span> confirm <span class="kbd">Space</span> next/speed up <span class="kbd">A</span> analyze</details>
       </div>
       <h3>Action log</h3><div class="log" id="log"></div>
       <div class="dock-toggles">
-        <button id="tg-ev" class="toggle ${store.get("dock_ev", true) ? "on" : ""}">Live EV</button>
+        <button id="tg-ev" class="toggle ${store.get("dock_ev", true) ? "on" : ""}" ${companionOn() ? "disabled" : ""}>Live EV</button>
         <button id="tg-ranges" class="toggle ${store.get("dock_ranges", false) ? "on" : ""}">Preflop ranges</button>
         <button id="tg-rank" class="toggle ${store.get("dock_rank", false) ? "on" : ""}">Hand rankings</button>
       </div>
-      <div id="dock-ev" class="dock" ${store.get("dock_ev", true) ? "" : "hidden"}></div>
+      <div id="dock-ev" class="dock" ${evOn() ? "" : "hidden"}></div>
       <div id="dock-ranges" class="dock" ${store.get("dock_ranges", false) ? "" : "hidden"}></div>
       <div id="dock-rank" class="dock" ${store.get("dock_rank", false) ? "" : "hidden"}></div>
     </div>
@@ -275,6 +278,13 @@ async function showTable() {
   if (store.get("dock_ranges", false)) renderRangesDock();
   $("#auto").onchange = e => store.set("autodeal", e.target.checked);
   $("#speed").onchange = e => store.set("speed", e.target.value);
+  $("#companion-on").onchange = e => {
+    store.set("companion", e.target.checked);
+    if (!e.target.checked) $("#companion").hidden = true;
+    $("#tg-ev").disabled = e.target.checked;  // Easy mode replaces the Live EV panel while it's on
+    $("#dock-ev").hidden = !evOn();
+    renderEvDock(T.cur);
+  };
   let armed = false;
   $("#leave").onclick = async () => {
     const midHand = T.cur && !T.cur.hand_over;
@@ -372,7 +382,7 @@ function drawActions(f) {
   clearTimeout(T.autoTimer);
   const busy = T.playing && T.frames.length;
   const L = !busy && !f.hand_over && !f.busted ? f.legal : null;
-  if (store.get("dock_ev", true)) renderEvDock(f, L);
+  if (evOn()) renderEvDock(f, L);
   const bb = f.stakes.bb, unit = f.stakes.sb;
   const hero = f.seats.find(s => s.is_hero);
   // controls row (always the same layout; disabled when it isn't your turn)
@@ -469,9 +479,21 @@ function drawActions(f) {
 async function send(action, amount) {
   $$("#actions button").forEach(b => b.disabled = true);
   try {
+    if (companionOn()) await companionVerdict(action);  // grade first: the spot is gone once you've acted
     const r = await api("/api/act", { action, amount });
     enqueue(r.frames);
   } catch (e) { toast(e.message); drawActions(T.cur); }
+}
+/* same verdict as the hand review, shown the moment you act. Stays up until your next decision. */
+async function companionVerdict(action) {
+  const box = $("#companion");
+  if (!box) return;
+  let r;
+  try { r = await api("/api/live_ev?action=" + action); } catch (e) { return; }  // never let this block your move
+  if (!r.active) return;
+  const street = r.street[0].toUpperCase() + r.street.slice(1);
+  box.innerHTML = `<div class="companion-head">${street} · you chose <b>${esc(action)}</b></div>${shouldHTML({ action, should: r.should, flags: [] }, "✗ Bad move. Better: ")}`;
+  box.hidden = false;
 }
 async function nextHand() {
   clearTimeout(T.autoTimer);
@@ -520,6 +542,9 @@ function spawnCallouts(prev, f) {
 
 /* ------------------------------------------------------------------ live EV (Monte Carlo at each of your decisions) */
 const EV = { key: null, data: null };
+const companionOn = () => store.get("companion", false);
+const evOn = () => store.get("dock_ev", true) || companionOn();
+const dockName = () => companionOn() ? "Easy mode" : "Live EV";
 async function renderEvDock(f, L) {
   const box = $("#dock-ev");
   if (!box || box.hidden || !f) return;
@@ -527,12 +552,12 @@ async function renderEvDock(f, L) {
   if (!L) {
     const hero = f.seats.find(s => s.is_hero);
     const msg = f.hand_over ? "Hand over. Runs again at your next decision." : hero && hero.folded ? "You folded." : "Runs when it's your turn.";
-    box.innerHTML = `<div class="dock-head">Live EV · <span>${msg}</span></div>`;
+    box.innerHTML = `<div class="dock-head">${dockName()} · <span>${msg}</span></div>`;
     EV.key = null;
     return;
   }
   const key = [f.hand_id, f.street, L.pot, L.to_call, L.current_bet, f.seats.filter(s => s.in_hand && !s.folded).length].join("|");
-  const loading = `<div class="dock-head">Live EV · <span>Running 10,000 deals…</span></div>`;
+  const loading = `<div class="dock-head">${dockName()} · <span>Running 10,000 deals…</span></div>`;
   if (EV.key === key) { box.innerHTML = EV.data ? evHTML(EV.data) : loading; return; }
   EV.key = key; EV.data = null;
   box.innerHTML = loading;
@@ -543,7 +568,37 @@ async function renderEvDock(f, L) {
   const b = $("#dock-ev");
   if (b && !b.hidden) b.innerHTML = evHTML(r);
 }
+/* the odds worked through with this hand's numbers. Stops short of the answer so you still decide. */
+function companionHTML(r) {
+  const n = r.left, firstRound = r.street === "preflop" && r.raises === 0;  // the seat count only holds until someone raises
+  const after = firstRound ? `${n} player${n === 1 ? "" : "s"} act${n === 1 ? "s" : ""} after you`
+    : `${r.opponents} opponent${r.opponents === 1 ? "" : "s"} still in`;
+  const head = `<div class="dock-head"><b>${r.pos}</b> (${esc(seatName(r.pos))}) · <span>${after}</span> · <a href="#learn" target="_blank">Learn</a></div>`;
+  let steps, ask;
+  if (r.street === "preflop" && r.play_pct != null) {
+    const facing = r.raises === 0 ? "with nobody raising yet" : r.raises === 1 ? "against a raise" : "against a re-raise";
+    steps = [`<b>Your hand:</b> ${esc(r.hand)} is in the top ${pct(r.hand_pct)} of starting hands.`,
+             `<b>This seat:</b> ${facing}, the book plays the top ${pct(r.play_pct)}.`];
+    ask = "Is your hand inside that range?";
+  } else if (r.street === "preflop") {
+    steps = [`<b>Your hand:</b> ${esc(r.hand)} is in the top ${pct(r.hand_pct)} of starting hands.`, `<b>Price:</b> nobody raised, so seeing the flop is free.`];
+    ask = "Is it strong enough to raise, or just check?";
+  } else if (r.to_call) {
+    const eq = r.eq_range, ev = eq * r.pot - (1 - eq) * r.to_call;
+    steps = [`<b>You need:</b> ${fmt(r.to_call)} ÷ (${fmt(r.pot)} + ${fmt(r.to_call)}) = ${pct(r.req)}`,
+             `<b>Your chance:</b> about ${pct(eq)} against what ${r.opponents === 1 ? "they" : `these ${r.opponents} players`} likely hold.`,
+             `<b>Average result of calling:</b> (${pct(eq)} × ${fmt(r.pot)}) − (${pct(1 - eq)} × ${fmt(r.to_call)}) = <b class="${cls(ev)}">${sfmt(ev)}</b>`];
+    ask = "Is your chance bigger than what you need?";
+  } else {
+    steps = [`<b>Price:</b> nobody bet, so checking is free.`,
+             `<b>Your chance:</b> about ${pct(r.eq_range)} against what ${r.opponents === 1 ? "they" : `these ${r.opponents} players`} likely hold.`,
+             `<b>To bet for value:</b> you want about ${pct(r.bet_at)} or more.`];
+    ask = "Are you strong enough to bet?";
+  }
+  return `${head}<ol class="oddsteps tight">${steps.map(s => `<li>${s}</li>`).join("")}</ol><div class="ask">${ask}</div>`;
+}
 function evHTML(r) {
+  if (companionOn()) return companionHTML(r);
   const sh = r.should, street = r.street[0].toUpperCase() + r.street.slice(1);
   const evs = r.to_call ? `<div class="ev-grid num">
       <span><i>Need</i>${pct(r.req)}</span>
@@ -770,14 +825,14 @@ function verdictBadge(d) {
   return same ? `<span class="badge good">Good</span>` : d.should.match ? `<span class="badge note">Close</span>` : `<span class="badge mistake">Improve</span>`;
 }
 const ACT_GROUP = a => (a === "bet" || a === "raise") ? "aggro" : a;
-function shouldHTML(d) {
+function shouldHTML(d, badHead = "✗ Better: ") {
   const sh = d.should;
   if (!sh) return d.flags.map(f => `<div class="flag"><span class="badge ${f.level}">${f.level}</span>${esc(f.text)}</div>`).join("");
   const same = ACT_GROUP(d.action) === ACT_GROUP(sh.action);
   let head, kind;
   if (same) { head = "✓ Good play"; kind = "ok"; }
   else if (sh.match) { head = `≈ Close spot · suggested: ${esc(sh.label)}`; kind = "close"; }
-  else { head = `✗ Better: ${esc(sh.label)}${sh.close ? " (close spot)" : ""}`; kind = "bad"; }
+  else { head = `${badHead}${esc(sh.label)}${sh.close ? " (close spot)" : ""}`; kind = "bad"; }
   return `<div class="should ${kind}"><b>${head}</b><div>${esc(sh.why)}</div></div>`;
 }
 function improveCount(an) {
@@ -1147,6 +1202,145 @@ function lineChart(el, series, opt = {}) {
     $$("[data-s]", el).forEach(c => c.onchange = () => { series[+c.dataset.s].off = !c.checked; draw(); });
   };
   draw();
+}
+
+/* ------------------------------------------------------------------ learn: seats, the range chart, odds step by step */
+const SEATS = {
+  UTG: ["Under the gun", "First to act before the flop, with everyone still to come."],
+  "UTG+1": ["Under the gun +1", "Second to act (bigger tables only)."],
+  "UTG+2": ["Under the gun +2", "Third to act (bigger tables only)."],
+  MP: ["Middle position", "Middle of the order (bigger tables only)."],
+  LJ: ["Lojack", "Three seats before the button, still fairly early (bigger tables only)."],
+  HJ: ["Hijack", "Two seats before the button. Named for “hijacking” the cutoff's chance to steal the blinds."],
+  CO: ["Cutoff", "One seat before the button. Named because a raise here can “cut off” the button."],
+  BTN: ["Button", "The dealer seat, marked D. Acts last on every street after the flop: the best seat."],
+  SB: ["Small blind", "Forced to bet half a blind before seeing cards. Acts first after the flop."],
+  BB: ["Big blind", "Forced to bet one blind. Acts last before the flop, but near the front after it."],
+};
+const seatName = p => (SEATS[p] ? SEATS[p][0] : p);
+const LEARN_SEATS = [["UTG", 5], ["HJ", 4], ["CO", 3], ["BTN", 2], ["SB", 1], ["BB", 0]];
+
+function learnGrid(chart) {
+  const R = "AKQJT98765432";
+  let g = "";
+  for (let i = 0; i < 13; i++) for (let j = 0; j < 13; j++) {
+    const c = i === j ? R[i] + R[j] : i < j ? R[i] + R[j] + "s" : R[j] + R[i] + "o";
+    g += `<div class="rc ${chart[c] || "fold"} ${c === LEARN.hand ? "mine" : ""}" data-c="${c}">${c}</div>`;
+  }
+  return `<div class="rgrid">${g}</div>`;
+}
+const LEARN = { hand: "K9o", pos: "UTG", chart: {} };
+function handExample(c) {
+  const [a, b] = c;
+  if (c.length === 2) return { cards: `${a}s ${b}h`, words: `a pair of ${a}s, any two suits`, ways: 6 };
+  return c[2] === "s" ? { cards: `${a}h ${b}h`, words: `${a} and ${b} of the same suit`, ways: 4 }
+    : { cards: `${a}s ${b}d`, words: `${a} and ${b} of different suits`, ways: 12 };
+}
+function learnHand() {
+  const c = LEARN.hand, ex = handExample(c), act = LEARN.chart[c] || "fold";
+  $("#hand-ex").innerHTML = `<b>${c}</b> looks like ${miniCards(ex.cards)}: ${ex.words}. There are ${ex.ways} ways to be dealt it. From ${LEARN.pos}: <b>${ACT_STYLE[act]}</b>.`;
+}
+async function learnChart(pos) {
+  const r = await api(`/api/preflop_ranges?pos=${pos}&sit=open&n=6`);
+  const left = LEARN_SEATS.find(s => s[0] === pos)[1];
+  $$("#seat-pick button").forEach(b => b.classList.toggle("on", b.dataset.pos === pos));
+  const play = Math.round(r.pct.raise || 0);
+  $("#seat-why").innerHTML = pos === "BB"
+    ? `<b>Big blind, nobody raised.</b> You already paid, so checking is free. Blue means see the flop for free, and red means your hand is worth raising.`
+    : `<b>${seatName(pos)} (${pos}):</b> ${left} player${left === 1 ? "" : "s"} still act after you. Raise about ${play}% of hands (red), fold the rest (grey).`;
+  LEARN.pos = pos; LEARN.chart = r.chart;
+  $("#seat-chart").innerHTML = learnGrid(r.chart);
+  $$("#seat-chart .rc").forEach(el => el.onclick = () => {
+    LEARN.hand = el.dataset.c;
+    $$("#seat-chart .rc.mine").forEach(x => x.classList.remove("mine"));
+    el.classList.add("mine");
+    learnHand();
+  });
+  learnHand();
+}
+function learnCalc() {
+  const num = id => Math.max(0, +$(id).value || 0);
+  const pot = num("#c-pot"), call = num("#c-call"), outs = Math.min(num("#c-outs"), 20), two = $("#c-cards").value === "2";
+  if (!call) { $("#calc-out").innerHTML = `<p class="muted">Enter an amount to call.</p>`; return; }
+  const need = call / (pot + call), chance = Math.min(outs * (two ? 4 : 2), 100) / 100;
+  const ev = chance * pot - (1 - chance) * call, good = chance >= need;
+  $("#calc-out").innerHTML = `<ol class="oddsteps">
+    <li><b>What you need:</b> ${fmt(call)} ÷ (${fmt(pot)} + ${fmt(call)}) = <b>${pct(need)}</b></li>
+    <li><b>Your chance:</b> ${outs} outs × ${two ? 4 : 2} = <b>${pct(chance)}</b></li>
+    <li><b>Compare:</b> ${pct(chance)} is ${good ? "at or above" : "below"} ${pct(need)}</li>
+    <li><b>Average result of calling:</b> (${pct(chance)} × ${fmt(pot)}) − (${pct(1 - chance)} × ${fmt(call)}) = <b class="${cls(ev)}">${sfmt(ev)}</b></li>
+  </ol><div class="should ${good ? "ok" : "bad"}"><b>${good ? "Calling makes money over time" : "Calling loses money over time"}</b></div>`;
+}
+async function showLearn() {
+  view.innerHTML = `<div class="learn">
+  <h1>Learn the basics</h1>
+  <p class="muted">Four short lessons, then turn on <b>Easy mode</b> at the table to practice with real hands. These are the app's own rules of thumb, not solver output.</p>
+
+  <section class="panel"><h2>1. What the seats mean</h2>
+    <p>Seats are named by <b>when you act</b>, not by where you're sitting. The dealer button moves one seat each hand, so your seat name changes every hand. Here's a 6-player table, in the order players act before the flop:</p>
+    <table class="list seats"><tr><th>Seat</th><th>Name</th><th>Players after you</th><th>What it means</th></tr>
+      ${LEARN_SEATS.map(([p, n]) => `<tr><td><b>${p}</b></td><td>${SEATS[p][0]}</td><td class="num">${n}</td><td>${SEATS[p][1]}</td></tr>`).join("")}</table>
+    <p class="muted">Bigger tables add seats after UTG: ${["UTG+1", "UTG+2", "MP", "LJ"].join(", ")}. Smaller tables drop the early ones first.</p>
+  </section>
+
+  <section class="panel"><h2>2. Why the chart changes with your seat</h2>
+    <p>The chart answers one question: <b>is this hand good enough to play from this seat?</b> Your cards don't get better or worse. What changes is how many players can still beat you.</p>
+    <p>Say your hand is in the top 25%. Each opponent has about a 25% chance of holding something as good or better, like rolling a die. Players who already folded can't hurt you, so the later you act, the fewer dice are left:</p>
+    <ul><li><b>5 players left (UTG):</b> about a 76% chance at least one has you beat.</li>
+      <li><b>2 players left (BTN):</b> about a 44% chance.</li></ul>
+    <p>Late seats also act after others on later streets, so they see more before deciding. That's why the red area grows as you click toward the button:</p>
+    <div id="seat-pick" class="row">${LEARN_SEATS.map(([p]) => `<button data-pos="${p}">${p}</button>`).join("")}</div>
+    <p id="seat-why"></p><p id="hand-ex"></p><div id="seat-chart"></div>
+    <p class="muted">Click any square to see example cards, then switch seats to watch the answer change. Pairs run down the diagonal, <b>s</b> means suited (same suit) and <b>o</b> means offsuit.</p>
+    <p class="muted"><b>This chart only covers your two starting cards.</b> Once the flop comes, stop using it and go to lesson 4.</p>
+  </section>
+
+  <section class="panel"><h2>3. Odds, step by step</h2>
+    <p>Every call comes down to one comparison: <b>is my chance of winning bigger than the price I'm being offered?</b></p>
+    <p><b>Example.</b> You have four hearts after the flop, needing one more for a flush. The pot is $40, including your opponent's bet, and it costs you $10 to call.</p>
+    <ol class="oddsteps">
+      <li><b>Work out what you need.</b> Amount to call ÷ (pot + amount to call). $10 ÷ ($40 + $10) = <b>20%</b>. You have to win at least 20% of the time to break even. This is called <b>pot odds</b>.</li>
+      <li><b>Count your outs.</b> Outs are the cards that make your hand a winner. There are 13 hearts and you can see 4, so <b>9 outs</b>.</li>
+      <li><b>Turn outs into a chance.</b> Multiply by <b>4</b> with two cards still to come (on the flop), or by <b>2</b> with one to come (on the turn). 9 × 4 = <b>36%</b>. This chance of winning is called your <b>equity</b>.</li>
+      <li><b>Compare.</b> 36% is more than 20%, so calling makes money over time.</li>
+      <li><b>See why.</b> Play this 100 times: you win $40 about 36 times (+$1,440) and lose $10 about 64 times (−$640). That's +$800, or <b>+$8 per call</b>. This average is called <b>EV</b> (expected value).</li>
+    </ol>
+    <p class="muted">Multiplying by 4 assumes you see both cards for this one price, so it runs high if your opponent is likely to bet again.</p>
+    <h3>Try your own</h3>
+    <div class="calc">
+      <label>Pot <input id="c-pot" type="number" min="0" value="40"></label>
+      <label>To call <input id="c-call" type="number" min="0" value="10"></label>
+      <label>Outs <input id="c-outs" type="number" min="0" max="20" value="9"></label>
+      <label>Cards to come <select id="c-cards"><option value="2">2 (on the flop)</option><option value="1">1 (on the turn)</option></select></label>
+    </div>
+    <div id="calc-out"></div>
+  </section>
+
+  <section class="panel"><h2>4. Why your odds change on every card</h2>
+    <p>You're not hunting for the best possible hand. You're asking: <b>how often does my hand win against what this opponent probably has?</b> Every new card changes that answer, so you work it out again each time.</p>
+    <p>Here's one hand. You hold ${miniCards("Ah Kh")}. Pretend you could see your opponent's ${miniCards("Qs Qd")}:</p>
+    <table class="list seats"><tr><th>Street</th><th>Board</th><th>Your chance</th><th>What happened</th></tr>
+      <tr><td><b>Before the flop</b></td><td></td><td class="num">46%</td><td>They have a pair and you don't, but your high cards and suited hand keep it close.</td></tr>
+      <tr><td><b>Flop</b></td><td>${miniCards("9h 7h 2s")}</td><td class="num">54%</td><td>You still have no pair, but two more hearts give you a flush draw. You're now ahead, with two cards to come.</td></tr>
+      <tr><td><b>Turn</b></td><td>${miniCards("9h 7h 2s 3c")}</td><td class="num">34%</td><td>That card missed, and now only one card is left. 15 of the 44 unseen cards win for you: 9 hearts, 3 aces and 3 kings.</td></tr>
+      <tr><td><b>River</b></td><td>${miniCards("9h 7h 2s 3c Kd")}</td><td class="num">100%</td><td>The king gives you the higher pair. No cards are left, so nothing can change.</td></tr></table>
+    <p>Your cards never changed, but your chance went from 46% to 54% to 34% to 100%. Say that on the turn they bet $50 into a $100 pot. The pot is now $150, so you need $50 ÷ ($150 + $50) = 25%. You have 34%, so you call. If the same bet came with a chance of 15%, you'd fold.</p>
+    <p>In a real hand you can't see their cards, so you estimate from how they've played. Big bets usually mean strong hands. That guess is called their <b>range</b>, and it's what Easy mode uses for “your chance”. It's an estimate, so treat it as a guide.</p>
+  </section>
+
+  <section class="panel"><h2>Using this at the table</h2>
+    <ol class="oddsteps">
+      <li><b>Before the flop:</b> use your seat and the chart. Is your hand inside the range for this seat?</li>
+      <li><b>After the flop, facing a bet:</b> compare your chance with what you need.</li>
+      <li><b>After the flop, nobody bet:</b> checking is free. Bet when your hand is likely the best.</li>
+    </ol>
+    <p>Tick <b>Easy mode</b> at the table and it does this math with your real hand, then rates your move. At the table your chance comes from simulating 10,000 deals against what opponents likely hold, which also covers hands that aren't draws. Turn it off once you can do the steps yourself.</p>
+    <a href="#table"><button class="primary">Go to the table</button></a>
+  </section></div>`;
+  $$("#seat-pick button").forEach(b => b.onclick = () => learnChart(b.dataset.pos));
+  $$(".calc input, .calc select").forEach(i => i.oninput = learnCalc);
+  learnCalc();
+  await learnChart("UTG");
 }
 
 route();
