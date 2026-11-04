@@ -102,10 +102,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/state":
             return self._send(200, GAME.state())
         if path == "/api/live_ev":
-            return self._send(200, GAME.live_ev())
+            return self._send(200, GAME.live_ev((qs.get("action") or [None])[0]))
         if path == "/api/preflop_ranges":
             g = lambda k: (qs.get(k) or [None])[0] or None
-            return self._send(200, GAME.preflop_ranges(g("pos"), g("sit")))
+            n = g("n")
+            return self._send(200, GAME.preflop_ranges(g("pos"), g("sit"), int(n) if n and n.isdigit() else None))
         if path == "/api/sessions":
             return self._send(200, db.sessions(500))
         if path == "/api/hands":

@@ -59,6 +59,7 @@ They're strong heuristic bots, **not** a game-theory solver. Bot types are hidde
 ## Study aids (at the table, under the action log)
 
 - **Live EV** (on by default): every time it's your turn, the app runs a 10,000-deal Monte Carlo of your hand against what the opponents' actions say they're likely holding, and shows your equity, the equity you need to call, the EV of calling vs. folding, and the suggested play. It only uses what you could know at the table (estimated ranges, never the bots' cards), runs in about 0.1–0.3 s, and the same numbers appear in the hand review afterwards. Turn it off if you want to play unassisted.
+- **Easy mode** (tick it at the table): walks through the odds with your real numbers on your turn, then rates your move as soon as you act. Off by default. The **Learn** tab explains seats, the range chart and pot odds from scratch.
 - **Preflop ranges**: a 13×13 chart (AA down to 22) colored raise / call / check / fold. It follows your seat and what players before you did (folded to you, limpers, a raise, a re-raise) and outlines your current hand. Untick "Follow my current hand" to explore any seat or situation.
 - **Hand rankings**: cheat sheet from four of a kind down to high card, with examples and how often each hand happens.
 

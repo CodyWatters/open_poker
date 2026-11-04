@@ -5,7 +5,7 @@ import random
 import threading
 from datetime import datetime, timezone
 
-from .analysis import analyze, hand_facts, live_decision
+from .analysis import analyze, hand_facts, live_decision, PLAYER_ACTS
 from .bots import Bot, NAMES, random_profile
 from .cards import cards_str, card_str
 from .db import DB, now
@@ -157,7 +157,7 @@ class Game:
             out["net"] = cash - t.stakes["buyin"]
             return out
 
-    def preflop_ranges(self, pos=None, sit=None):
+    def preflop_ranges(self, pos=None, sit=None, n=None):
         """Suggested preflop chart for your seat and what's happened before you (or a chosen scenario)."""
         from .analysis import preflop_chart
         from .cards import hand_class
@@ -198,7 +198,7 @@ class Game:
             raises = {"open": 0, "vs_raise": 1, "vs_3bet": 2}.get(sit, 0)
         sit = {0: "open", 1: "vs_raise"}.get(raises, "vs_3bet")
         bb_unopened = pos == "BB" and raises == 0
-        chart = preflop_chart(pos, raises, bb_unopened, n=(h.n if h else 6))
+        chart = preflop_chart(pos, raises, bb_unopened, n=n or (h.n if h else 6))
         # headline in plain words
         if raises == 0:
             if bb_unopened:
@@ -233,9 +233,10 @@ class Game:
                 return {"seated": False}
             return {"seated": True, "frames": [self.table.frame(None)]}
 
-    def live_ev(self):
+    def live_ev(self, action=None):
         """Monte Carlo readout for the decision you're facing right now. Uses only what you could know
-        at the table (estimated ranges, never the bots' cards). {"active": False} when it isn't your turn."""
+        at the table (estimated ranges, never the bots' cards). {"active": False} when it isn't your turn.
+        With an action, also grades that action (should.match) for the coach."""
         with self.lock:
             t = self.table
             h = t.hand if t else None
@@ -253,7 +254,8 @@ class Game:
             key = {"hand_id": h.id, "n_actions": len(h.actions)}
             to_call, pot = L["to_call"], L["pot"]
         # simulate outside the lock so acting and dealing never wait on it
-        out = live_decision(view, hole, pos, opps, street, to_call, pot, was_pfr=(pfr == hero.seat))
+        out = live_decision(view, hole, pos, opps, street, to_call, pot, was_pfr=(pfr == hero.seat),
+                            hero_action=action if action in PLAYER_ACTS else "fold")
         out.update(key, active=True, street=street, pot=pot, to_call=to_call)
         return out
 
