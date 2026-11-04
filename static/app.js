@@ -783,6 +783,21 @@ function shouldHTML(d) {
 function improveCount(an) {
   return an ? an.decisions.filter(d => d.should && !d.should.match).length : 0;
 }
+/* decision and result, kept apart: a good decision can lose and a bad one can win */
+const LUCK_STYLE = { earned: "ok", unlucky: "ok", lucky: "close", costly: "bad" };
+function luckHTML(l, short) {
+  if (!l) return "";
+  const head = `<div class="should ${LUCK_STYLE[l.kind] || "close"}"><b>${esc(l.title)}</b><div>${esc(l.text)}</div></div>`;
+  if (!l.folded || short) return head;
+  const who = l.vs.length === 1 ? esc(l.vs[0]) : `the ${l.vs.length} players who stayed in`;
+  const end = l.board
+    ? `<div>The board would have been ${miniCards(l.board)}. ${l.hero_hand === l.best_hand ? `You'd both have made ${esc(l.hero_hand)}${l.would === "lose" ? ", and their other cards would have beaten yours" : l.would === "win" ? ", and your other cards would have won" : ""}.` : `You'd have made ${esc(l.hero_hand)} against ${esc(l.best_hand)}.`}</div>`
+    : `<div class="muted">This hand ended early, so the rest of the cards can't be shown. New hands save them.</div>`;
+  return `${head}<div class="whatif">
+    <div>Staying in would have cost at least ${fmt(l.price)}. Against ${who}, you'd have won about <b>${pct(l.chance)}</b> of the time.</div>
+    ${end}
+    <div class="muted">This assumes the same players stay in. If you'd stayed, they might have bet differently, and you might have had to pay more.</div></div>`;
+}
 function allinHTML(an) {
   if (!an || !an.allin) return "";
   return `<div class="panel" style="margin-bottom:12px"><h3>All-in luck check</h3>
@@ -827,6 +842,7 @@ async function openAnalysis(id) {
         <td>${miniCards(s.hole_str.join(" "))}</td><td class="muted">${s.is_hero ? "" : esc(s.archetype_label || "")}</td>
         <td class="num ${cls(s.end_stack - s.start_stack)}">${s.end_stack !== s.start_stack ? sfmt(s.end_stack - s.start_stack) : ""}</td></tr>`).join("")}</table>
     </details>
+    ${h.luck ? `<div class="panel" style="margin-bottom:12px"><h3>${h.luck.folded ? "What if you stayed in?" : "Luck or good play?"}</h3>${luckHTML(h.luck)}</div>` : ""}
     ${allinHTML(an)}
     <h3>Your decisions</h3>
     <p class="muted" style="font-size:14px;margin:4px 0 10px"><b>Equity vs ranges</b> = what you could know at the table. <b>Equity vs actual</b> = hindsight vs their real cards. Orange line = equity needed to call.</p>
@@ -939,7 +955,8 @@ async function showHand(id) {
       </div>
     </div>
     <div>
-      ${allinHTML(an)}
+      ${h.luck ? `<div class="panel" style="margin-bottom:12px"><h3>${h.luck.folded ? "What if you stayed in?" : "Luck or good play?"}</h3>${luckHTML(h.luck)}</div>` : ""}
+    ${allinHTML(an)}
       <div class="panel" style="margin-bottom:12px">
         <div class="row"><h3 style="margin:0">Your decisions</h3><span class="spacer"></span>
           <button id="copyai">Copy for AI review</button><button id="copyhh">Copy hand text</button></div>

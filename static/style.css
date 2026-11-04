@@ -289,6 +289,8 @@ details.collapsible[open] > summary { margin-bottom: 10px; }
 .should.ok { background: #173a2a; border-color: var(--win); color: #d5f5e4; }
 .should.close { background: #3a3218; border-color: var(--warn); color: #fbecc6; }
 .should.bad { background: #4a1f1f; border-color: var(--loss); color: #ffd6d6; }
+.whatif { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
+.whatif .muted { font-size: 13px; }
 
 /* preflop range chart */
 .ranges-modal .modal, .rankings-modal .modal { width: min(720px, 100%); }

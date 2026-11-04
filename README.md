@@ -60,6 +60,7 @@ They're strong heuristic bots, **not** a game-theory solver. Bot types are hidde
 
 - **Live EV** (on by default): every time it's your turn, the app runs a 10,000-deal Monte Carlo of your hand against what the opponents' actions say they're likely holding, and shows your equity, the equity you need to call, the EV of calling vs. folding, and the suggested play. It only uses what you could know at the table (estimated ranges, never the bots' cards), runs in about 0.1–0.3 s, and the same numbers appear in the hand review afterwards. Turn it off if you want to play unassisted.
 - **Preflop ranges**: a 13×13 chart (AA down to 22) colored raise / call / check / fold. It follows your seat and what players before you did (folded to you, limpers, a raise, a re-raise) and outlines your current hand. Untick "Follow my current hand" to explore any seat or situation.
+- **What if you stayed in?** (hand review): after a fold, plays the hand out against the players who stayed and says whether the fold was right, separately from whether you would have won. Hands you play get the same check: good decisions vs. good luck.
 - **Hand rankings**: cheat sheet from four of a kind down to high card, with examples and how often each hand happens.
 
 ## Analyzing your hands
